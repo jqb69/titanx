@@ -4,8 +4,11 @@
 # MOTHER SCRIPT  Full TitanX Installation (v2.1)
 # Includes Swap + Age Check + Clear Flow
 # ================================================
-
 set -euo pipefail
+
+USER_NAME="ajax"
+PROJECT_HOME="/home/${USER_NAME}/titanx"
+DATA_PATH="${PROJECT_HOME}/data"
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
@@ -24,6 +27,24 @@ create_swap() {
     else
         log "✓ Swap already exists"
     fi
+}
+
+setup_storage_mount() {
+    log "Linking NVMe volume to project data directory..."
+    # DigitalOcean Auto-Mount point (Ext4) [cite: 227, 230, 238]
+    VOLUME_DIR=$(ls -d /mnt/volume_* 2>/dev/null | head -n 1)
+    
+    if [ -z "$VOLUME_DIR" ]; then
+        log "WARNING: NVMe volume not found. Using local disk."
+        mkdir -p "$DATA_PATH"
+    else
+        log "✓ Volume found at $VOLUME_DIR. Linking to $DATA_PATH"
+        mkdir -p "$(dirname "$DATA_PATH")"
+        if [ ! -L "$DATA_PATH" ] && [ ! -d "$DATA_PATH" ]; then
+            ln -s "$VOLUME_DIR" "$DATA_PATH"
+        fi
+    fi
+    chown -R "${USER_NAME}:${USER_NAME}" "$DATA_PATH"
 }
 
 install_age_early() {
@@ -73,6 +94,7 @@ check_root() {
 
 check_root
 create_swap
+setup_storage_mount
 install_age_early
 
 log "Running installation scripts in order..."
@@ -81,6 +103,9 @@ log "Running installation scripts in order..."
 ./create-secrets.sh       || error "create-secrets.sh failed"
 ./install-titanx-docker.sh || error "install-titanx-docker.sh failed"
 
+log "========================================"
+log "✅ TITANX DEPLOYED ON NVMe STORAGE SUCCESSFULLY!"
+log "========================================"
 
 # Verification and Logs 
 verify_docker_final
