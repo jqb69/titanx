@@ -60,14 +60,24 @@ check_and_install_age() {
 }
 
 install_docker() {
-    log "Installing Docker..."
-    apt update && apt upgrade -y
-    apt install -y curl ufw fail2ban
+    log "Installing Docker and dependencies..."
+    
+    # Update and upgrade core packages
+    apt-get update -qq && apt-get upgrade -y -qq
+    
+    # Install prerequisites
+    apt-get install -y -qq curl ufw fail2ban
 
+    # Official Docker convenience script
     curl -fsSL https://get.docker.com | sh
-    apt install -y docker-compose-plugin
+
+    # Install Compose plugin
+    apt-get install -y -qq docker-compose-plugin
+
+    # Add user to docker group
     usermod -aG docker "$USER"
-    log "✓ Docker installed"
+    
+    log "✓ Docker and Compose plugin installed successfully"
 }
 
 setup_ufw() {
