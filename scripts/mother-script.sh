@@ -13,7 +13,7 @@ error() { echo "[ERROR] $*" >&2; exit 1; }
 # ====================== FUNCTIONS ======================
 
 create_swap() {
-    log "Creating 2GB Swap (recommended for 4GB Droplet)..."
+    log "Creating 2GB Swap (critical for 2GB RAM Droplet)..."
     if [[ ! -f /swapfile ]]; then
         fallocate -l 2G /swapfile
         chmod 600 /swapfile
