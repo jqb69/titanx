@@ -90,60 +90,76 @@ setup_ufw() {
     log "✓ UFW configured"
 }
 
+# --- MODULAR DOCKER SETUP FUNCTION ---
 create_docker_files() {
-    log "Creating Docker configuration..."
+    log "Configuring Docker environment for $USER..."
 
     mkdir -p "$DOCKER_DIR"
-    chown -R "$USER":"$USER" "$PROJECT_DIR"
+    mkdir -p "$HERMES_DATA"
 
-    # Extract Redis password
-    REDIS_PASS=$(su - "$USER" -c "age -d -i ~/.ssh/id_ed25519 $SECRETS_AGE" | grep REDIS_PASSWORD | cut -d'=' -f2)
+    # Move entrypoint script to persistent volume [cite: 341, 350, 353]
+    if [[ -f "${PROJECT_DIR}/entrypoint.sh" ]]; then
+        log "Moving entrypoint.sh to $HERMES_DATA..."
+        mv "${PROJECT_DIR}/entrypoint.sh" "${HERMES_DATA}/entrypoint.sh"
+        chmod +x "${HERMES_DATA}/entrypoint.sh"
+        chown "$USER":"$USER" "${HERMES_DATA}/entrypoint.sh"
+    else
+        error "entrypoint.sh missing from ${PROJECT_DIR}!"
+    fi
 
+    # Extract Redis Password for orchestration [cite: 317, 319, 327]
+    log "Extracting Redis credentials..."
+    local redis_pass
+    redis_pass=$(su - "$USER" -c "age -d -i ~/.ssh/id_ed25519 $SECRETS_AGE" | grep REDIS_PASSWORD | cut -d'=' -f2)
+    
+    [[ -z "$redis_pass" ]] && error "REDIS_PASSWORD not found in $SECRETS_AGE."
+
+    # Generate docker-compose.yml [cite: 308, 317, 347]
+    log "Generating docker-compose.yml..."
     cat > "$DOCKER_DIR/docker-compose.yml" << EOF
 version: "3.9"
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASS} --appendonly yes
+    command: redis-server --requirepass ${redis_pass} --appendonly yes
     volumes:
       - redis_data:/data
+    networks:
+      - titanx-net
 
   hermes:
     image: nousresearch/hermes-agent:latest
+    container_name: hermes
     restart: unless-stopped
+    user: "1000:1000" # Matches host ajax user 
     volumes:
-      - ${HERMES_DATA}:/opt/data
-      - ${PROJECT_DIR}/workspace:/workspace
-      - /home/${USER}/.ssh:/root/.ssh:ro
+      - ${HERMES_DATA}:/home/ajax/titanx/.hermes
+      - ${PROJECT_DIR}/workspace:/home/ajax/workspace
+      - /home/${USER}/.ssh/id_ed25519:/home/ajax/.ssh/id_ed25519:ro
     environment:
-      - REDIS_URL=redis://:${REDIS_PASS}@redis:6379/0
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - WORKSPACE_DIR=/workspace
+      - WORKSPACE_DIR=/home/ajax/workspace
     ports:
       - "127.0.0.1:8642:8642"
     depends_on:
       - redis
-    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
+    entrypoint: ["/bin/bash", "/home/ajax/titanx/.hermes/entrypoint.sh"]
+    networks:
+      - titanx-net
 
 volumes:
   redis_data:
+
+networks:
+  titanx-net:
+    driver: bridge
 EOF
 
-    # In-memory decryption entrypoint
-    cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF'
-#!/bin/bash
-set -e
-if [[ -f /opt/data/secrets.age ]]; then
-    echo "Loading secrets directly into RAM (no disk leak)..."
-    eval "$(age -d -i /root/.ssh/id_ed25519 /opt/data/secrets.age | sed 's/^/export /')"
-fi
-exec /usr/local/bin/hermes gateway run
-EOF
-
-    chmod +x "${HERMES_DATA}/entrypoint.sh"
-    chown "$USER":"$USER" "${HERMES_DATA}/entrypoint.sh"
+    chown -R "$USER":"$USER" "$PROJECT_DIR"
+    log "✓ Docker configuration generated."
 }
 
 start_services() {
