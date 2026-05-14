@@ -1,0 +1,50 @@
+---
+# deploy.yaml
+name: Deploy TitanX to DigitalOcean
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: titanxenv
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SCP Scripts to Root Bootstrap
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DIGITAL_OCEAN_IP }}
+          username: ${{ secrets.DIGITAL_OCEAN_USER }}
+          key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+          source: "scripts/*.sh"
+          target: "/root/titanx-bootstrap"
+          strip_components: 1
+
+      - name: Run TitanX Installation
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DIGITAL_OCEAN_IP }}
+          username: ${{ secrets.DIGITAL_OCEAN_USER }}
+          key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+          envs: OPENROUTER_KEY,G_USER,G_TOKEN,P_PRIVATE_KEY
+        env:
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          G_USER: ${{ secrets.GIT_USER }}
+          G_TOKEN: ${{ secrets.GIT_TOKEN }}
+          P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
+        script: |
+          set -euo pipefail
+          # 1. Move everything to /home/ajax/titanx
+          cd /root/titanx-bootstrap
+          chmod +x *.sh
+          ./bootstrap-to-ajax.sh
+          # 2. Switch to project dir
+          cd /home/ajax/titanx
+          ./upload.sh /home/ajax/titanx
+          # 3. Generate the age.txt file using streamed envs
+          ./generate-agetxt.sh
+          # 4. Hand off to mother-script for final encryption/deployment
+          ./mother-script.sh
