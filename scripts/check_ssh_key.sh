@@ -2,7 +2,7 @@
 # scripts/check_ssh_key.sh
 # Local pre-upload validation for raw key strings
 
-RAW_KEaY="$1"
+RAW_KEY="$1"
 
 error_exit() {
     echo "CRITICAL ERROR: $1"
