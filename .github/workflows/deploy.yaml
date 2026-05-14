@@ -30,21 +30,32 @@ jobs:
           username: ${{ secrets.DIGITAL_OCEAN_USER }}
           key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
           envs: OPENROUTER_KEY,G_USER,G_TOKEN,P_PRIVATE_KEY
+          script: |
+            set -euo pipefail
+            
+            echo "=== TitanX Deployment Started ==="
+
+            cd /root/titanx-bootstrap
+            chmod +x *.sh
+
+            # Bootstrap (user creation + move files)
+            ./bootstrap-to-ajax.sh
+
+            # Switch to final project directory
+            cd /home/ajax/titanx
+
+            # Prepare permissions
+            ./upload.sh /home/ajax/titanx
+
+            # Generate secrets.txt
+            ./generate-agetxt.sh
+
+            # Full install (encryption + Docker)
+            ./mother-script.sh
+
+            echo "=== TitanX Deployment Completed Successfully ==="
         env:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           G_USER: ${{ secrets.GIT_USER }}
           G_TOKEN: ${{ secrets.GIT_TOKEN }}
           P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
-        script: |
-          set -euo pipefail
-          # 1. Move everything to /home/ajax/titanx
-          cd /root/titanx-bootstrap
-          chmod +x *.sh
-          ./bootstrap-to-ajax.sh
-          # 2. Switch to project dir
-          cd /home/ajax/titanx
-          ./upload.sh /home/ajax/titanx
-          # 3. Generate the age.txt file using streamed envs
-          ./generate-agetxt.sh
-          # 4. Hand off to mother-script for final encryption/deployment
-          ./mother-script.sh
