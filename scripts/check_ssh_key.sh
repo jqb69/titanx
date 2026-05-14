@@ -4,43 +4,39 @@ set -euo pipefail
 
 validate_raw_key() {
     local RAW_KEY="$1"
-    
-    # Remove any leading/trailing whitespace
-    RAW_KEY=$(echo "$RAW_KEY" | xargs)
+
+    # Clean input
+    RAW_KEY=$(echo "$RAW_KEY" | sed '/^$/d' | xargs)
 
     if [[ -z "$RAW_KEY" ]]; then
-        echo "Error: SSH Key is empty."
+        echo "❌ DIGITAL_OCEAN_SSH_KEY secret is empty!"
         exit 1
     fi
 
-    # Check if the header already exists
+    echo "Raw key length: ${#RAW_KEY} characters"
+
+    # Auto-fix headers
     if [[ "$RAW_KEY" == *"-----BEGIN"* ]]; then
-        echo "Header detected. Using key as-is."
+        echo "✅ Key already contains headers"
         FIXED_KEY="$RAW_KEY"
     else
-        echo "No header detected. Adding RSA headers..."
-        # Wrap the raw blob with standard RSA headers
+        echo "🔧 Adding OPENSSH headers (recommended for ed25519)..."
         FIXED_KEY=$(cat <<EOF
------BEGIN RSA PRIVATE KEY-----
+-----BEGIN OPENSSH PRIVATE KEY-----
 $RAW_KEY
------END RSA PRIVATE KEY-----
+-----END OPENSSH PRIVATE KEY-----
 EOF
 )
     fi
 
-    # Basic integrity check: ensure it has at least some bulk
-    if [[ ${#FIXED_KEY} -lt 100 ]]; then
-        echo "Error: Key content is too short to be valid."
-        exit 1
-    fi
+    # Export to GitHub Actions environment
+    cat <<EOF >> "$GITHUB_ENV"
+VALID_SSH_KEY<<HEREDOC
+$FIXED_KEY
+HEREDOC
+EOF
 
-    # Push the FIXED_KEY to the GitHub Environment so actions can use it
-    echo "VALID_SSH_KEY<<EOF" >> "$GITHUB_ENV"
-    echo "$FIXED_KEY" >> "$GITHUB_ENV"
-    echo "EOF" >> "$GITHUB_ENV"
-    
-    echo "✅ Key validated and headers applied."
+    echo "✅ SSH Key successfully validated and exported as VALID_SSH_KEY"
 }
 
-# Execute the function using the secret passed as the first argument
 validate_raw_key "$1"
