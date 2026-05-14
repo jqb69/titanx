@@ -13,12 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # === KEY FIX STEP ===
+      - name: Validate & Fix SSH Key
+        run: |
+          chmod +x ./scripts/check-ssh-key.sh
+          ./scripts/check-ssh-key.sh "${{ secrets.DIGITAL_OCEAN_SSH_KEY }}"
+
       - name: SCP Scripts to Root Bootstrap
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
           username: ${{ secrets.DIGITAL_OCEAN_USER }}
-          key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+          key: ${{ env.VALID_SSH_KEY }}
           source: "scripts/*.sh"
           target: "/root/titanx-bootstrap"
           strip_components: 1
@@ -28,29 +34,20 @@ jobs:
         with:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
           username: ${{ secrets.DIGITAL_OCEAN_USER }}
-          key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+          key: ${{ env.VALID_SSH_KEY }}
           envs: OPENROUTER_KEY,G_USER,G_TOKEN,P_PRIVATE_KEY
           script: |
             set -euo pipefail
-            
             echo "=== TitanX Deployment Started ==="
 
             cd /root/titanx-bootstrap
             chmod +x *.sh
 
-            # Bootstrap (user creation + move files)
             ./bootstrap-to-ajax.sh
 
-            # Switch to final project directory
             cd /home/ajax/titanx
-
-            # Prepare permissions
             ./upload.sh /home/ajax/titanx
-
-            # Generate secrets.txt
             ./generate-agetxt.sh
-
-            # Full install (encryption + Docker)
             ./mother-script.sh
 
             echo "=== TitanX Deployment Completed Successfully ==="
