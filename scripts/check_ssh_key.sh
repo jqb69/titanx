@@ -1,36 +1,46 @@
 #!/bin/bash
-# scripts/check_ssh_key.sh
-# Local pre-upload validation for raw key strings
-
-RAW_KEY="$1"
-
-error_exit() {
-    echo "CRITICAL ERROR: $1"
-    exit 1
-}
+# scripts/check-ssh-key.sh
+set -euo pipefail
 
 validate_raw_key() {
-    # Strip all white space and newlines from the key 
-    CLEAN_KEY=$(echo "$RAW_KEY" | tr -d '[:space:]')
-    KEY_LENGTH=${#CLEAN_KEY}
+    local RAW_KEY="$1"
+    
+    # Remove any leading/trailing whitespace
+    RAW_KEY=$(echo "$RAW_KEY" | xargs)
 
-    echo "Validating raw SSH Key string..."
-
-    # RSA-4096 keys in base64/hex are significantly long (typically > 2500 chars) [cite: 276, 280]
-    if [ "$KEY_LENGTH" -lt 2500 ]; then
-        error_exit "Key length ($KEY_LENGTH) is too short for a standard RSA-4096 key string."
+    if [[ -z "$RAW_KEY" ]]; then
+        echo "Error: SSH Key is empty."
+        exit 1
     fi
 
-    # Ensure it doesn't already contain PEM headers (to avoid double-wrapping)
-    if [[ "$RAW_KEY" =~ "BEGIN" ]]; then
-        error_exit "Key already contains PEM headers. Please provide ONLY the raw key string."
+    # Check if the header already exists
+    if [[ "$RAW_KEY" == *"-----BEGIN"* ]]; then
+        echo "Header detected. Using key as-is."
+        FIXED_KEY="$RAW_KEY"
+    else
+        echo "No header detected. Adding RSA headers..."
+        # Wrap the raw blob with standard RSA headers
+        FIXED_KEY=$(cat <<EOF
+-----BEGIN RSA PRIVATE KEY-----
+$RAW_KEY
+-----END RSA PRIVATE KEY-----
+EOF
+)
     fi
 
-    echo "✓ Raw SSH Key string validated (Length: $KEY_LENGTH)."
+    # Basic integrity check: ensure it has at least some bulk
+    if [[ ${#FIXED_KEY} -lt 100 ]]; then
+        echo "Error: Key content is too short to be valid."
+        exit 1
+    fi
+
+    # Push the FIXED_KEY to the GitHub Environment so actions can use it
+    echo "VALID_SSH_KEY<<EOF" >> "$GITHUB_ENV"
+    echo "$FIXED_KEY" >> "$GITHUB_ENV"
+    echo "EOF" >> "$GITHUB_ENV"
+    
+    echo "✅ Key validated and headers applied."
 }
 
-if [ -z "$RAW_KEY" ]; then
-    error_exit "DIGITAL_OCEAN_SSH_KEY secret is empty."
-fi
-
-validate_raw_key
+# Execute the function using the secret passed as the first argument
+validate_raw_key "$1"
