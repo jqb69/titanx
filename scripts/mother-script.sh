@@ -46,6 +46,24 @@ setup_storage_mount() {
     chown -R "${USER_NAME}:${USER_NAME}" "$DATA_PATH"
 }
 
+wait_for_apt_lock() {
+    log "[PRE-FLIGHT] Waiting for apt/dpkg locks to clear..."
+    local timeout=120 waited=0
+    while [[ $waited -lt $timeout ]]; do
+        if ! fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && \
+           ! fuser /var/lib/apt/lists/lock >/dev/null 2>&1 && \
+           ! pgrep -x apt-get >/dev/null 2>&1 && \
+           ! pgrep -x dpkg >/dev/null 2>&1; then
+            log "[PRE-FLIGHT] ✓ Apt is clear"
+            return 0
+        fi
+        log "[PRE-FLIGHT] ⚠️ Lock held, waiting 8s..."
+        sleep 8
+        waited=$((waited + 8))
+    done
+    error "Timeout waiting for apt locks"
+}
+
 install_age_early() {
     log "Ensuring 'age' is installed..."
     if ! command -v age >/dev/null 2>&1; then
@@ -86,6 +104,7 @@ check_root() {
 }
 
 check_root
+wait_for_apt_lock
 create_swap
 setup_storage_mount
 install_age_early
