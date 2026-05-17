@@ -83,41 +83,63 @@ setup_ufw() {
     log "✓ UFW configured"
 }
 
-configure_and_launch() {
-    log "Generating docker-compose.yml and preparing entrypoint..."
+cconfigure_and_launch() {
+    log "Preparing Docker configuration and entrypoint..."
 
     mkdir -p "$DOCKER_DIR" "$HERMES_DATA"
     chown -R "$USER":"$USER" "$PROJECT_DIR"
 
-    # === ENTRYPOINT HANDLING (Smart + Idempotent) ===
+    # === ENTRYPOINT HANDLING (Forced Overwrite to Prevent Stale Cache) ===
     if [[ -f "${PROJECT_DIR}/entrypoint.sh" ]]; then
-        log "Moving entrypoint.sh from project root to persistent volume..."
+        log "Moving uploaded entrypoint.sh to persistent volume..."
         mv "${PROJECT_DIR}/entrypoint.sh" "${HERMES_DATA}/entrypoint.sh"
-    elif [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
-        log "Creating default entrypoint.sh in persistent volume..."
+    else
+        log "Generating fresh, container-native entrypoint.sh..."
+        # Force-writes every deployment to clear out old host-style paths completely
         cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
 #!/bin/bash
-set -e
-if [[ -f /opt/data/secrets.age ]]; then
-    eval "$(age -d -i /opt/ssh/id_ed25519 /opt/data/secrets.age | sed 's/^/export /')"
+set -euo pipefail
+
+# absolute volume paths mapped inside the container virtual environment
+SECRETS_AGE="/opt/data/secrets.age"
+KEY_PATH="/opt/ssh/id_ed25519"
+
+if [[ -f "$SECRETS_AGE" && -f "$KEY_PATH" ]]; then
+    echo "[ENTRYPOINT] Decrypting secrets directly into container RAM..."
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^# ]] && continue
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            val="${BASH_REMATCH[2]}"
+            export "$key"="$val"
+            echo "[ENTRYPOINT] Exported: $key"
+        fi
+    done < <(age -d -i "$KEY_PATH" "$SECRETS_AGE")
+else
+    echo "[ENTRYPOINT] WARNING: Target assets missing at $SECRETS_AGE or $KEY_PATH."
 fi
-exec /usr/local/bin/hermes gateway run
+
+echo "[ENTRYPOINT] Activating internal image Python virtual environment..."
+if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
+    source "/opt/hermes/.venv/bin/activate"
+fi
+
+echo "[ENTRYPOINT] Launching Containerized Hermes Gateway Process..."
+exec hermes gateway run
 EOF2
-    else
-        log "✓ entrypoint.sh already exists in persistent volume"
     fi
 
     chmod +x "${HERMES_DATA}/entrypoint.sh"
     chown "$USER":"$USER" "${HERMES_DATA}/entrypoint.sh"
 
-    # Extract Redis password
+    # Extract Redis password for compose
     local redis_pass
-    redis_pass=$(su - "$USER" -c "age -d -i ~/.ssh/id_ed25519 \"$SECRETS_AGE\"" 2>/dev/null | grep REDIS_PASSWORD | cut -d'=' -f2 || true)
+    redis_pass=$(su - "$USER" -c "age -d -i ~/.ssh/id_ed25519 \"$SECRETS_AGE\"" 2>/dev/null | grep "^REDIS_PASSWORD=" | cut -d'=' -f2 || true)
     [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
 
-    # Generate docker-compose.yml
+    # Generate docker-compose.yml (Removed obsolete version flag)
     cat > "$DOCKER_DIR/docker-compose.yml" << EOF
-version: "3.9"
 services:
   redis:
     image: redis:7-alpine
@@ -162,7 +184,7 @@ EOF
 
     log "Starting Hermes + Redis..."
     cd "$DOCKER_DIR"
-    docker compose up -d
+    docker compose up -d --force-recreate
     log "✅ Services started successfully"
 }
 
