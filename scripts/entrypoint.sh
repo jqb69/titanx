@@ -3,12 +3,11 @@
 set -euo pipefail
 
 # === INTERNAL CONTAINER CONFIGURATION ===
-# These internal paths align with the docker-compose volume mappings
+# FIXED: Replaced invalid host paths with absolute container volume mounts
 USER_NAME="ajax"
 PROJECT_DIR="/home/${USER_NAME}/titanx"
-HERMES_DATA="${PROJECT_DIR}/.hermes"
-SECRETS_AGE="${HERMES_DATA}/secrets.age"
-KEY_PATH="/home/${USER_NAME}/.ssh/id_ed25519"
+SECRETS_AGE="/opt/data/secrets.age"
+KEY_PATH="/opt/ssh/id_ed25519"
 
 # Security whitelist for runtime environment extraction
 ALLOWED=("REDIS_PASSWORD" "OPENROUTER_API_KEY" "GITHUB_TOKEN" "GIT_USER" "PROJECT_PRIVATE_KEY")
@@ -21,7 +20,7 @@ load_runtime_secrets() {
         log "Decrypting secrets from $SECRETS_AGE directly into RAM..."
         
         if [[ ! -f "$KEY_PATH" ]]; then
-            error "Decryption identity key missing at $KEY_PATH"
+            error "Decryption identity key missing inside container at $KEY_PATH"
         fi
 
         # Process substitution prevents variable loss from piping into a subshell
@@ -43,13 +42,19 @@ load_runtime_secrets() {
             fi
         done < <(age -d -i "$KEY_PATH" "$SECRETS_AGE" 2>/dev/null)
     else
-        log "WARNING: $SECRETS_AGE not found. Using system defaults."
+        log "WARNING: $SECRETS_AGE not found inside container. Using system defaults."
     fi
 }
 
 # --- EXECUTION ---
 load_runtime_secrets
 
+# FIXED: Source the image's internal Python virtual environment before executing 
+# so the standard container shell can discover the 'hermes' binary path.
+if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
+    log "Activating internal image Python virtual environment..."
+    source "/opt/hermes/.venv/bin/activate"
+fi
+
 log "Launching Containerized Hermes Gateway..."
-# UN-FUCKED PATH: Let the container shell resolve 'hermes' automatically from its internal $PATH
 exec hermes gateway run
