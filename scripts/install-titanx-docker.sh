@@ -83,7 +83,7 @@ setup_ufw() {
     log "✓ UFW configured"
 }
 
-cconfigure_and_launch() {
+configure_and_launch() {
     log "Preparing Docker configuration and entrypoint..."
 
     mkdir -p "$DOCKER_DIR" "$HERMES_DATA"
