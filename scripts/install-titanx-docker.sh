@@ -140,8 +140,31 @@ services:
       - ${HERMES_DATA}:/opt/data
       - ${PROJECT_DIR}/workspace:/workspace
       - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
+    environment:
+      - WORKSPACE_DIR=/workspace
     ports:
       - "127.0.0.1:8642:8642"
+    depends_on:
+      - redis
+    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
+    networks:
+      - titanx-net
+
+  hermes-avangarde:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-avangarde
+    restart: unless-stopped
+    user: "1000:1000"
+    env_file:
+      - hermes.env
+    volumes:
+      - ${HERMES_DATA}:/opt/data
+      - ${PROJECT_DIR}/workspace/avangarde:/workspace
+      - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
+    environment:
+      - WORKSPACE_DIR=/workspace
+    ports:
+      - "127.0.0.1:8643:8642"
     depends_on:
       - redis
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
