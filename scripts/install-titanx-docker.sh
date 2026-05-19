@@ -100,9 +100,22 @@ configure_and_launch() {
     chmod 600 "$env_file"
     log "✓ Secrets decrypted and secured"
 
+    # Extract required values safely
     local redis_pass
+    local openrouter_model
     redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
+    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
+    
     [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
+
+    # Generate config.yaml automatically so the agent doesn't prompt
+    log "Generating hermes config.yaml..."
+    cat > "${HERMES_DATA}/config.yaml" << EOF
+model: ${openrouter_model}
+provider: openrouter
+EOF
+    chown 1000:1000 "${HERMES_DATA}/config.yaml"
+    chmod 644 "${HERMES_DATA}/config.yaml"
 
     # Minimal entrypoint
     if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
@@ -110,15 +123,19 @@ configure_and_launch() {
 #!/bin/bash
 set -euo pipefail
 echo "[ENTRYPOINT] Launching Hermes..."
+# The agent will now pick up the config.yaml automatically
 exec hermes gateway run
 EOF2
     fi
     chmod +x "${HERMES_DATA}/entrypoint.sh"
     chown 1000:1000 "${HERMES_DATA}/entrypoint.sh"
 
+    # ... (Keep your existing docker-compose.yml generation block) ...
+    # Ensure your compose file volumes mount $HERMES_DATA to /opt/data
+    
+
     # docker-compose
     cat > "$DOCKER_DIR/docker-compose.yml" << EOF
-version: "3.9"
 services:
   redis:
     image: redis:7-alpine
@@ -184,7 +201,8 @@ EOF
     log "Starting services..."
     cd "$DOCKER_DIR"
     docker compose up -d --force-recreate
-    log "✅ Services started successfully"
+    log "✅ Services started successfully with auto-configured config.yaml"
+    
 }
 
 main() {
