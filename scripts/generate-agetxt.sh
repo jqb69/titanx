@@ -15,6 +15,7 @@ generate_file() {
 
     # 1. Strict validation
     [[ -z "${OPENROUTER_KEY:-}" ]] && error "OPENROUTER_KEY missing"
+    [[ -z "${OPENROUTER_MODEL:-}" ]] && error "OPENROUTER_MODEL missing"
     [[ -z "${G_USER:-}" ]] && error "G_USER missing"
     [[ -z "${G_TOKEN:-}" ]] && error "G_TOKEN missing"
     [[ -z "${P_PRIVATE_KEY:-}" ]] && error "P_PRIVATE_KEY missing"
@@ -23,14 +24,15 @@ generate_file() {
     log "Writing mapped variables to secrets.txt..."
     cat <<EOF > "$SECRETS_TXT"
 OPENROUTER_API_KEY=$OPENROUTER_KEY
+OPENROUTER_MODEL=$OPENROUTER_MODEL
 GIT_USER=$G_USER
 GITHUB_TOKEN=$G_TOKEN
 PROJECT_PRIVATE_KEY=$P_PRIVATE_KEY
 EOF
 
     # 3. Integrity check
-    for var in "OPENROUTER_API_KEY" "GIT_USER" "GITHUB_TOKEN" "PROJECT_PRIVATE_KEY"; do
-        if ! grep -q "^$var=" "$SECRETS_TXT"; then
+    for var in "OPENROUTER_API_KEY" "OPENROUTER_MODEL" "GIT_USER" "GITHUB_TOKEN" "PROJECT_PRIVATE_KEY"; do
+        if ! grep -q "^${var}=" "$SECRETS_TXT"; then
             error "Failed to write $var to secrets.txt!"
         fi
     done
