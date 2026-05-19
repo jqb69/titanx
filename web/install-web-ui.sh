@@ -1,5 +1,7 @@
 #!/bin/bash
 # scripts/install-web-ui.sh
+# Installs Streamlit Web UI + Caddy HTTPS
+
 set -euo pipefail
 
 USER="ajax"
@@ -13,9 +15,9 @@ error() { echo "[ERROR] $*" >&2; exit 1; }
 # ====================== FUNCTIONS ======================
 
 check_web_source() {
-    log "Checking web/ directory..."
+    log "Checking for web/ directory in repo..."
     if [[ ! -f "${PROJECT_DIR}/web/app.py" ]]; then
-        error "web/app.py not found in repository!"
+        error "web/app.py not found! Please add it to the repository."
     fi
     log "✓ web/app.py found"
 }
@@ -24,10 +26,12 @@ copy_web_files() {
     log "Copying Web UI files..."
     mkdir -p "$WEB_DIR"
     cp -r "${PROJECT_DIR}/web/"* "$WEB_DIR/" 2>/dev/null || true
+    log "✓ Web files copied"
 }
 
 create_requirements_and_dockerfile() {
     log "Creating requirements.txt and Dockerfile..."
+    
     cat > "$WEB_DIR/requirements.txt" << EOF
 streamlit
 requests
@@ -45,7 +49,7 @@ EOF
 }
 
 add_caddy_and_compose() {
-    log "Adding Caddy + Web UI to docker-compose.yml..."
+    log "Adding Web UI + Caddy (HTTPS) to docker-compose..."
 
     cat >> "$DOCKER_DIR/docker-compose.yml" << EOF
 
@@ -75,7 +79,7 @@ volumes:
   caddy_data:
 EOF
 
-    # Create Caddyfile for automatic HTTPS
+    # Caddyfile for automatic HTTPS
     cat > "$DOCKER_DIR/Caddyfile" << EOF
 :80, :443 {
     reverse_proxy web:8501
@@ -89,15 +93,16 @@ EOF
 }
 
 build_and_start() {
-    log "Building Web UI..."
+    log "Building Web UI image..."
     cd "$WEB_DIR"
     docker build -t titanx-web:latest .
 
     log "Starting Web UI + Caddy..."
     cd "$DOCKER_DIR"
     docker compose up -d --build web caddy
-    log "✅ Web UI + HTTPS (Caddy) started!"
-    log "Access at: https://YOUR_DROPLET_IP"
+
+    log "✅ Web UI + HTTPS started!"
+    log "Access → https://YOUR_DROPLET_IP"
 }
 
 # ====================== MAIN ======================
@@ -110,7 +115,7 @@ main() {
     add_caddy_and_compose
     build_and_start
 
-    log "✅ Web UI with HTTPS installation completed"
+    log "✅ Web UI installation completed successfully"
 }
 
 main "$@"
