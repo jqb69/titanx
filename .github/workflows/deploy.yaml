@@ -1,5 +1,6 @@
 ---
 # deploy.yaml
+
 name: Deploy TitanX to DigitalOcean
 
 on:
@@ -34,7 +35,7 @@ jobs:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
           username: ${{ secrets.DIGITAL_OCEAN_USER }}
           key: ${{ env.VALID_SSH_KEY }}
-          envs: OPENROUTER_KEY,G_USER,G_TOKEN,P_PRIVATE_KEY
+          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY
           script: |
             set -euo pipefail
             echo "=== TitanX Deployment Started ==="
@@ -54,4 +55,5 @@ jobs:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           G_USER: ${{ secrets.GIT_USER }}
           G_TOKEN: ${{ secrets.GIT_TOKEN }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
