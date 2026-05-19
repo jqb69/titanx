@@ -1,7 +1,5 @@
 #!/bin/bash
-# scripts/install-web-ui.sh
-# Installs Streamlit Web UI + Caddy HTTPS
-
+# scripts/install-webui.sh
 set -euo pipefail
 
 USER="ajax"
@@ -15,9 +13,9 @@ error() { echo "[ERROR] $*" >&2; exit 1; }
 # ====================== FUNCTIONS ======================
 
 check_web_source() {
-    log "Checking for web/ directory in repo..."
+    log "Checking web/ directory in repository..."
     if [[ ! -f "${PROJECT_DIR}/web/app.py" ]]; then
-        error "web/app.py not found! Please add it to the repository."
+        error "web/app.py not found in repository! Please add it first."
     fi
     log "✓ web/app.py found"
 }
@@ -49,7 +47,13 @@ EOF
 }
 
 add_caddy_and_compose() {
-    log "Adding Web UI + Caddy (HTTPS) to docker-compose..."
+    log "Adding Web UI + Caddy (HTTPS) to docker-compose.yml..."
+
+    # Avoid duplicate entries
+    if grep -q "container_name: titanx-web" "$DOCKER_DIR/docker-compose.yml" 2>/dev/null; then
+        log "✓ Web + Caddy services already exist"
+        return 0
+    fi
 
     cat >> "$DOCKER_DIR/docker-compose.yml" << EOF
 
@@ -79,7 +83,7 @@ volumes:
   caddy_data:
 EOF
 
-    # Caddyfile for automatic HTTPS
+    # Caddyfile with automatic HTTPS
     cat > "$DOCKER_DIR/Caddyfile" << EOF
 :80, :443 {
     reverse_proxy web:8501
@@ -102,7 +106,7 @@ build_and_start() {
     docker compose up -d --build web caddy
 
     log "✅ Web UI + HTTPS started!"
-    log "Access → https://YOUR_DROPLET_IP"
+    log "Access at: https://YOUR_DROPLET_IP"
 }
 
 # ====================== MAIN ======================
