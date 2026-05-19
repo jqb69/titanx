@@ -6,8 +6,8 @@
 set -euo pipefail
 
 # === PATHS ===
-USER_NAME="ajax"
-PROJECT_HOME="/home/${USER_NAME}/titanx"
+USER="ajax"
+PROJECT_HOME="/home/${USER}/titanx"
 DATA_PATH="${PROJECT_HOME}/data"
 DOCKER_PATH="${PROJECT_HOME}/docker"
 
@@ -32,7 +32,7 @@ create_swap() {
 setup_storage_mount() {
     log "Linking NVMe volume to project data directory..."
     VOLUME_DIR=$(ls -d /mnt/volume_* 2>/dev/null | head -n 1)
-   
+    
     if [ -z "$VOLUME_DIR" ]; then
         log "WARNING: NVMe volume not found. Using local disk."
         mkdir -p "$DATA_PATH"
@@ -43,7 +43,8 @@ setup_storage_mount() {
             ln -s "$VOLUME_DIR" "$DATA_PATH"
         fi
     fi
-    chown -R "${USER_NAME}:${USER_NAME}" "$DATA_PATH"
+    # FIXED: Using $USER instead of the non-existent $USER_NAME
+    chown -R "${USER}:${USER}" "$DATA_PATH"
 }
 
 wait_for_apt_lock() {
@@ -125,15 +126,17 @@ print_app_logs
 log "========================================"
 log "✅ FULL TITANX INSTALLATION COMPLETED SUCCESSFULLY!"
 log "========================================"
-
 log "Next Steps:"
 log "1. Download your SSH private key:"
-log "   scp ajax@YOUR_DROPLET_IP:/home/ajax/.ssh/id_ed25519 ~/.ssh/titanx_ajax"
-log "   chmod 600 ~/.ssh/titanx_ajax"
+log "   scp ${USER}@YOUR_DROPLET_IP:/home/${USER}/.ssh/id_ed25519 ~/.ssh/titanx_${USER}"
+log "   chmod 600 ~/.ssh/titanx_${USER}"
 log ""
 log "2. Check services:"
-log "   cd /home/ajax/titanx/docker && docker compose logs -f"
+log "   cd ${DOCKER_PATH} && docker compose logs -f"
 log ""
-log "3. Test Hermes:"
-log "   docker exec -it titanx-hermes hermes chat"
+log "3. Test Hermes Gateway:"
+log "   docker exec -it hermes /opt/hermes/.venv/bin/hermes chat"
+log ""
+log "4. Test Hermes Avangarde:"
+log "   docker exec -it hermes-avangarde /opt/hermes/.venv/bin/hermes chat"
 log "========================================"
