@@ -13,9 +13,9 @@ error() { echo "[ERROR] $*" >&2; exit 1; }
 # ====================== FUNCTIONS ======================
 
 check_web_source() {
-    log "Checking web/ directory in repository..."
+    log "Checking web/ directory..."
     if [[ ! -f "${PROJECT_DIR}/web/app.py" ]]; then
-        error "web/app.py not found in repository! Please add it first."
+        error "web/app.py not found in repository!"
     fi
     log "✓ web/app.py found"
 }
@@ -23,13 +23,12 @@ check_web_source() {
 copy_web_files() {
     log "Copying Web UI files..."
     mkdir -p "$WEB_DIR"
-    cp -r "${PROJECT_DIR}/web/"* "$WEB_DIR/" 2>/dev/null || true
+    cp -a "${PROJECT_DIR}/web/." "$WEB_DIR/" 2>/dev/null || true
     log "✓ Web files copied"
 }
 
 create_requirements_and_dockerfile() {
-    log "Creating requirements.txt and Dockerfile..."
-    
+    log "Creating requirements and Dockerfile..."
     cat > "$WEB_DIR/requirements.txt" << EOF
 streamlit
 requests
@@ -40,18 +39,17 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
+COPY . .
 EXPOSE 8501
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
 EOF
 }
 
-add_caddy_and_compose() {
-    log "Adding Web UI + Caddy (HTTPS) to docker-compose.yml..."
+add_to_compose() {
+    log "Adding Web UI + Caddy to docker-compose.yml..."
 
-    # Avoid duplicate entries
     if grep -q "container_name: titanx-web" "$DOCKER_DIR/docker-compose.yml" 2>/dev/null; then
-        log "✓ Web + Caddy services already exist"
+        log "✓ Web UI already configured"
         return 0
     fi
 
@@ -65,14 +63,14 @@ add_caddy_and_compose() {
       - titanx-net
 
   caddy:
-    image: caddy:latest
+    image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ${DOCKER_DIR}/Caddyfile:/etc/caddy/Caddyfile
+      - ${DOCKER_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     networks:
       - titanx-net
@@ -83,43 +81,38 @@ volumes:
   caddy_data:
 EOF
 
-    # Caddyfile with automatic HTTPS
     cat > "$DOCKER_DIR/Caddyfile" << EOF
 :80, :443 {
     reverse_proxy web:8501
-    tls {
-        on_demand
-    }
+    tls internal
 }
 EOF
 
-    log "✓ Caddy configured for automatic HTTPS"
+    log "✓ Caddy + Web UI added (HTTPS with self-signed certs)"
 }
 
 build_and_start() {
-    log "Building Web UI image..."
+    log "Building and starting Web UI + Caddy..."
     cd "$WEB_DIR"
     docker build -t titanx-web:latest .
 
-    log "Starting Web UI + Caddy..."
     cd "$DOCKER_DIR"
     docker compose up -d --build web caddy
-
-    log "✅ Web UI + HTTPS started!"
-    log "Access at: https://YOUR_DROPLET_IP"
+    log "✅ Web UI + Caddy started!"
+    log "Access: http://YOUR_IP or https://YOUR_IP (self-signed)"
 }
 
 # ====================== MAIN ======================
 main() {
-    log "=== Installing Web UI with Caddy HTTPS ==="
+    log "=== Installing Web UI with Caddy ==="
 
     check_web_source
     copy_web_files
     create_requirements_and_dockerfile
-    add_caddy_and_compose
+    add_to_compose
     build_and_start
 
-    log "✅ Web UI installation completed successfully"
+    log "✅ Web UI installation completed"
 }
 
 main "$@"
