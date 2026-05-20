@@ -3,9 +3,9 @@
 set -euo pipefail
 
 validate_raw_key() {
-    local RAW_KEY="$1"
+    local RAW_KEY="${1:-}"
 
-    # Clean only empty lines — DO NOT use xargs (destroys multiline keys)
+    # Clean only empty lines, preserve all newlines and formatting
     RAW_KEY=$(echo "$RAW_KEY" | sed '/^$/d')
 
     if [[ -z "$RAW_KEY" ]]; then
@@ -29,12 +29,12 @@ EOF
 )
     fi
 
-    # Export fixed key for subsequent steps
-    cat <<HEREDOC >> "$GITHUB_ENV"
-VALID_SSH_KEY<<HEREDOC
-$FIXED_KEY
-HEREDOC
-HEREDOC
+    # Safe multiline export to GITHUB_ENV (Kimi's recommended way)
+    {
+        echo "VALID_SSH_KEY<<GHA_SSH_EOF"
+        echo "$FIXED_KEY"
+        echo "GHA_SSH_EOF"
+    } >> "$GITHUB_ENV"
 
     echo "✅ SSH Key validated and fixed successfully"
 }
