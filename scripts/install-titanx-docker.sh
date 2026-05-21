@@ -76,6 +76,8 @@ setup_ufw() {
     ufw allow 22/tcp comment 'Allow SSH'
     ufw allow 8642/tcp comment 'Hermes Main'
     ufw allow 8643/tcp comment 'Hermes Avangarde'
+    ufw allow 80/tcp comment 'HTTP' || true
+    ufw allow 443/tcp comment 'HTTPS' || true
     ufw default deny incoming
     ufw default allow outgoing
     ufw --force enable
