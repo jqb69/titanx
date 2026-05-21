@@ -52,13 +52,10 @@ jobs:
           script: |
             set -euo pipefail
             echo "=== TitanX App Deployment Started ==="
-
-            # CRITICAL FIX: You must be inside the scripts folder to execute these!
-            cd /home/ajax/titanx/scripts
+            cd /home/ajax/titanx/
             ./upload.sh /home/ajax/titanx
             ./generate-agetxt.sh
             ./mother-script.sh
-
             echo "=== TitanX App Deployment Completed ==="
         env:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
