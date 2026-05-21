@@ -95,6 +95,30 @@ print_app_logs() {
     else
         log "WARNING: Docker directory not found at $DOCKER_PATH"
     fi
+    log "========================================"
+    log "✅ FULL TITANX INSTALLATION COMPLETED SUCCESSFULLY!"
+    log "========================================"
+    log "Next Steps:"
+    log "1. Download your SSH private key:"
+    log "   scp ${USER}@YOUR_DROPLET_IP:/home/${USER}/.ssh/id_ed25519 ~/.ssh/titanx_${USER}"
+    log "   chmod 600 ~/.ssh/titanx_${USER}"
+    log ""
+    log "2. Check services:"
+    log "   cd ${DOCKER_PATH} && docker compose logs -f"
+    log ""
+    log "3. Test Hermes Gateway:"
+    log "   docker exec -it hermes /opt/hermes/.venv/bin/hermes chat"
+    log ""
+    log "4. Test Hermes Avangarde:"
+    log "   docker exec -it hermes-avangarde /opt/hermes/.venv/bin/hermes chat"
+    log "========================================"
+    log "Next Steps:"
+    log "   Hermes Main     → http://localhost:8642"
+    log "   Web UI (HTTPS)  → https://YOUR_IP"
+    log "   SSH Key: scp ${USER}@YOUR_IP:/home/${USER}/.ssh/id_ed25519 ~/.ssh/titanx_${USER}"
+    log "========================================"
+    log "========================================"
+
 }
 
 # ====================== MAIN ======================
@@ -113,37 +137,13 @@ install_age_early
 log "Running installation scripts in order..."
 ./create-ajax-user.sh     || error "create-ajax-user.sh failed"
 ./create-secrets.sh       || error "create-secrets.sh failed"
-./install-titanx-docker.sh || error "install-titanx-docker.sh failed"
-./install-webui.sh       || error "install-web-ui.sh failed"   # ← Added
+#./install-titanx-docker.sh || error "install-titanx-docker.sh failed"
+#./install-webui.sh       || error "install-web-ui.sh failed"   # ← Added
 
 log "========================================"
 log "✅ TITANX DEPLOYED ON NVMe STORAGE SUCCESSFULLY!"
 log "========================================"
 
 # Final verification
-verify_docker_final
-print_app_logs
-
-log "========================================"
-log "✅ FULL TITANX INSTALLATION COMPLETED SUCCESSFULLY!"
-log "========================================"
-log "Next Steps:"
-log "1. Download your SSH private key:"
-log "   scp ${USER}@YOUR_DROPLET_IP:/home/${USER}/.ssh/id_ed25519 ~/.ssh/titanx_${USER}"
-log "   chmod 600 ~/.ssh/titanx_${USER}"
-log ""
-log "2. Check services:"
-log "   cd ${DOCKER_PATH} && docker compose logs -f"
-log ""
-log "3. Test Hermes Gateway:"
-log "   docker exec -it hermes /opt/hermes/.venv/bin/hermes chat"
-log ""
-log "4. Test Hermes Avangarde:"
-log "   docker exec -it hermes-avangarde /opt/hermes/.venv/bin/hermes chat"
-log "========================================"
-log "Next Steps:"
-log "   Hermes Main     → http://localhost:8642"
-log "   Web UI (HTTPS)  → https://YOUR_IP"
-log "   SSH Key: scp ${USER}@YOUR_IP:/home/${USER}/.ssh/id_ed25519 ~/.ssh/titanx_${USER}"
-log "========================================"
-log "========================================"
+#verify_docker_final
+#print_app_logs
