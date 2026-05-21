@@ -1,6 +1,5 @@
 ---
 # deploy.yaml
-
 name: Deploy TitanX to DigitalOcean
 
 on:
@@ -19,41 +18,62 @@ jobs:
           chmod +x scripts/check_ssh_key.sh
           scripts/check_ssh_key.sh "${{ secrets.DIGITAL_OCEAN_SSH_KEY }}"
 
-      - name: SCP Scripts to Root Bootstrap
+      - name: SCP Scripts + Web UI
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
-          username: ${{ secrets.DIGITAL_OCEAN_USER }}
+          username: root
           key: ${{ env.VALID_SSH_KEY }}
-          source: "scripts/*.sh"
+          source: "scripts/,web/"
           target: "/root/titanx-bootstrap"
-          strip_components: 1
+          # No strip_components, so folders are preserved
 
-      - name: Run TitanX Installation
+      - name: Bootstrap (as root)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
-          username: ${{ secrets.DIGITAL_OCEAN_USER }}
+          username: root
           key: ${{ env.VALID_SSH_KEY }}
-          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY
+          script_stop: true
           script: |
             set -euo pipefail
-            echo "=== TitanX Deployment Started ==="
-
-            cd /root/titanx-bootstrap
+            cd /root/titanx-bootstrap/scripts
             chmod +x *.sh
-
             ./bootstrap-to-ajax.sh
 
-            cd /home/ajax/titanx
+      - name: Deploy App (as ajax)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DIGITAL_OCEAN_IP }}
+          username: ajax
+          key: ${{ env.VALID_SSH_KEY }}
+          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "=== TitanX App Deployment Started ==="
+
+            # CRITICAL FIX: You must be inside the scripts folder to execute these!
+            cd /home/ajax/titanx/scripts
             ./upload.sh /home/ajax/titanx
             ./generate-agetxt.sh
             ./mother-script.sh
 
-            echo "=== TitanX Deployment Completed ==="
+            echo "=== TitanX App Deployment Completed ==="
         env:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           G_USER: ${{ secrets.GIT_USER }}
           G_TOKEN: ${{ secrets.GIT_TOKEN }}
-          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
+
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DIGITAL_OCEAN_IP }}
+          username: ajax
+          key: ${{ env.VALID_SSH_KEY }}
+          script_stop: true
+          script: |
+            cd /home/ajax/titanx/scripts
+            ./healthcheck.sh
