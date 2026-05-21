@@ -41,6 +41,29 @@ jobs:
             chmod +x *.sh
             ./bootstrap-to-ajax.sh
 
+      - name: Core Deployment (as root)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DIGITAL_OCEAN_IP }}
+          username: root
+          key: ${{ env.VALID_SSH_KEY }}
+          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY
+          script_stop: true
+          script: |
+            set -euo pipefail
+            echo "=== TitanX App Deployment Started ==="
+            cd /home/ajax/titanx
+            ./upload.sh /home/ajax/titanx
+            ./generate-agetxt.sh
+            ./mother-script.sh
+            echo "=== TitanX App Deployment Completed ==="
+        env:
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          G_USER: ${{ secrets.GIT_USER }}
+          G_TOKEN: ${{ secrets.GIT_TOKEN }}
+          P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
+
       - name: Deploy App (as ajax)
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -51,12 +74,12 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            echo "=== TitanX App Deployment Started ==="
-            cd /home/ajax/titanx/
-            ./upload.sh /home/ajax/titanx
-            ./generate-agetxt.sh
-            ./mother-script.sh
-            echo "=== TitanX App Deployment Completed ==="
+            echo "=== Deploy App Phase Started (as ajax) ==="
+
+            cd /home/ajax/titanx/scripts
+            ./deploy-app.sh
+
+            echo "=== Deploy App Phase Completed ==="
         env:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
