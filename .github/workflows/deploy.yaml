@@ -52,8 +52,10 @@ jobs:
           script: |
             set -euo pipefail
             echo "=== TitanX App Deployment Started ==="
+            # Run FRESH upload.sh from bootstrap — purges ghosts and copies new files
+            /root/titanx-bootstrap/scripts/upload.sh
             cd /home/ajax/titanx
-            ./upload.sh /home/ajax/titanx
+            # ./upload.sh /home/ajax/titanx
             ./generate-agetxt.sh
             ./mother-script.sh
             echo "=== TitanX App Deployment Completed ==="
