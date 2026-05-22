@@ -1,95 +1,83 @@
 #!/bin/bash
-# scripts/upload.sh — Idempotent upload with stale script purge
+# scripts/upload.sh — Idempotent upload matching deploy.yaml layout
 set -euo pipefail
 
 USER="ajax"
 PROJECT_DIR="/home/${USER}/titanx"
-SOURCE_DIR="/root/titanx-bootstrap"  # Where SCP drops files
+SOURCE_DIR="/root/titanx-bootstrap"
 
 log() { echo "[$(date '+%H:%M:%S')] [UPLOAD] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
-# ====================== FUNCTIONS ======================
-
 verify_source() {
-    log "Verifying bootstrap source..."
-    if [[ ! -d "$SOURCE_DIR" ]]; then
-        error "Source directory $SOURCE_DIR not found. Did SCP succeed?"
-    fi
-    log "✓ Source found: $SOURCE_DIR"
+    [[ -d "$SOURCE_DIR" ]] || error "Source $SOURCE_DIR not found"
+    log "✓ Source verified"
 }
 
-purge_old_scripts() {
-    log "Purging stale .sh scripts in $PROJECT_DIR..."
-    
-    # Safety: only delete .sh files, never touch data/, .hermes/, docker/, web/, workspace/
-    # Also preserve secrets.age and any .txt files
+purge_stale() {
+    log "Purging stale artifacts..."
+
+    # Root-level: upload.sh, generate-agetxt.sh, mother-script.sh, etc.
     find "$PROJECT_DIR" -maxdepth 1 -type f -name "*.sh" -delete 2>/dev/null || true
     
-    # Also clean the scripts/ subdirectory if it exists
-    if [[ -d "$PROJECT_DIR/scripts" ]]; then
-        find "$PROJECT_DIR/scripts" -maxdepth 1 -type f -name "*.sh" -delete 2>/dev/null || true
-    fi
-    
-    log "✓ Old scripts purged"
+    # Compose overrides
+    rm -f "$PROJECT_DIR/docker-compose.override.yml" "$PROJECT_DIR/docker-compose.override.yaml" 2>/dev/null || true
+
+    # Wipe subdirectories completely (no overlay garbage)
+    rm -rf "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
+    mkdir -p "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
+
+    log "✓ Stale artifacts purged"
 }
 
-upload_new_files() {
-    log "Uploading new files from $SOURCE_DIR..."
-    
-    # Ensure target exists
-    mkdir -p "$PROJECT_DIR"
-    chown "$USER:$USER" "$PROJECT_DIR"
-    
-    # Copy scripts/ directory (new refactored deploy-app.sh, etc.)
+copy_fresh() {
+    log "Copying fresh files..."
+
+    # scripts/ directory (deploy-app.sh, install-webui.sh, healthcheck.sh, etc.)
     if [[ -d "$SOURCE_DIR/scripts" ]]; then
-        mkdir -p "$PROJECT_DIR/scripts"
-        cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/scripts/" 2>/dev/null || true
-        chown -R "$USER:$USER" "$PROJECT_DIR/scripts"
-        log "✓ scripts/ uploaded"
+        cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/scripts/"
+        log "✓ scripts/ uploaded ($(ls -1 "$PROJECT_DIR/scripts" | wc -l) files)"
     fi
-    
-    # Copy web/ directory (Streamlit app)
+
+    # web/ directory (Streamlit app.py, etc.)
     if [[ -d "$SOURCE_DIR/web" ]]; then
-        mkdir -p "$PROJECT_DIR/web"
-        cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/" 2>/dev/null || true
-        chown -R "$USER:$USER" "$PROJECT_DIR/web"
-        log "✓ web/ uploaded"
+        cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/"
+        log "✓ web/ uploaded ($(ls -1 "$PROJECT_DIR/web" | wc -l) files)"
     fi
-    
-    # Copy any loose .sh files at root (legacy compatibility during transition)
-    for f in "$SOURCE_DIR"/*.sh; do
-        [[ -f "$f" ]] || continue
-        cp "$f" "$PROJECT_DIR/"
-        chown "$USER:$USER" "$PROJECT_DIR/$(basename "$f")"
-        chmod +x "$PROJECT_DIR/$(basename "$f")"
+
+    # Root-level scripts that deploy.yaml expects at /home/ajax/titanx/
+    # These come from the source root if they exist there
+    for script in upload.sh generate-agetxt.sh; do
+        if [[ -f "$SOURCE_DIR/$script" ]]; then
+            cp "$SOURCE_DIR/$script" "$PROJECT_DIR/"
+            log "✓ Root script uploaded: $script"
+        elif [[ -f "$SOURCE_DIR/scripts/$script" ]]; then
+            cp "$SOURCE_DIR/scripts/$script" "$PROJECT_DIR/"
+            log "✓ Root script uploaded from scripts/: $script"
+        fi
     done
-    log "✓ Root .sh files uploaded"
 }
 
-verify_permissions() {
-    log "Setting permissions..."
+set_permissions() {
     chown -R "$USER:$USER" "$PROJECT_DIR"
-    find "$PROJECT_DIR" -maxdepth 2 -type f -name "*.sh" -exec chmod +x {} \;
+    find "$PROJECT_DIR" -type f -name "*.sh" -exec chmod +x {} \;
     log "✓ Permissions set"
 }
 
-# ====================== MAIN ======================
 main() {
     log "=== Idempotent Upload Starting ==="
-    
     verify_source
-    purge_old_scripts
-    upload_new_files
-    verify_permissions
+    purge_stale
+    copy_fresh
+    set_permissions
     
-    # Final safety: list what we have
-    log "=== Deployed scripts ==="
-    find "$PROJECT_DIR" -maxdepth 2 -type f -name "*.sh" | while read -r f; do
+    # Verify what we have
+    log "=== Deployed structure ==="
+    find "$PROJECT_DIR" -maxdepth 2 -type f | sort | while read -r f; do
         log "  → $f"
     done
     
-    log "✅ Upload completed — no stale scripts remain"
+    log "✅ Upload completed"
 }
 
 main "$@"
