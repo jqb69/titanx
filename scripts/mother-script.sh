@@ -137,8 +137,7 @@ install_age_early
 log "Running installation scripts in order..."
 ./create-ajax-user.sh     || error "create-ajax-user.sh failed"
 ./create-secrets.sh       || error "create-secrets.sh failed"
-#./install-titanx-docker.sh || error "install-titanx-docker.sh failed"
-#./install-webui.sh       || error "install-web-ui.sh failed"   # ← Added
+
 
 log "========================================"
 log "✅ TITANX ROOT INFRASTRUCTURE DEPLOYED SUCCESSFULLY!"
