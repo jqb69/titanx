@@ -45,15 +45,19 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 EOF
 }
 
-add_to_compose() {
+add_caddy_and_compose() {
     log "Adding Web UI + Caddy to docker-compose.yml..."
 
-    if grep -q "container_name: titanx-web" "$DOCKER_DIR/docker-compose.yml" 2>/dev/null; then
-        log "✓ Web UI already configured"
+    local compose_file="$DOCKER_DIR/docker-compose.yml"
+
+    # Check if web service already exists
+    if grep -qE "^  web:" "$compose_file" 2>/dev/null; then
+        log "✓ Web service already present, skipping"
         return 0
     fi
 
-    cat >> "$DOCKER_DIR/docker-compose.yml" << EOF
+    # Append services safely
+    cat >> "$compose_file" << EOF
 
   web:
     build: ${PROJECT_DIR}/web
@@ -61,6 +65,8 @@ add_to_compose() {
     restart: unless-stopped
     networks:
       - titanx-net
+    depends_on:
+      - hermes
 
   caddy:
     image: caddy:2-alpine
@@ -75,21 +81,31 @@ add_to_compose() {
     networks:
       - titanx-net
     depends_on:
-      - web
+      web:
+        condition: service_healthy
+EOF
 
+    # Add volumes section only if it doesn't exist
+    if ! grep -q "^volumes:" "$compose_file" 2>/dev/null; then
+        echo "" >> "$compose_file"
+        cat >> "$compose_file" << 'EOF'
 volumes:
   caddy_data:
 EOF
+    fi
 
-    cat > "$DOCKER_DIR/Caddyfile" << EOF
+    # Create Caddyfile
+    cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
 :80, :443 {
     reverse_proxy web:8501
     tls internal
 }
 EOF
 
-    log "✓ Caddy + Web UI added (HTTPS with self-signed certs)"
+    log "✓ Caddy + Web UI added successfully"
 }
+
+
 
 build_and_start() {
     log "Building and starting Web UI + Caddy..."
@@ -109,7 +125,7 @@ main() {
     check_web_source
     copy_web_files
     create_requirements_and_dockerfile
-    add_to_compose
+    add_caddy_and_compose
     build_and_start
 
     log "✅ Web UI installation completed"
