@@ -39,13 +39,11 @@ copy_fresh() {
     cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/scripts/"
     cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/"
 
-    # Root scripts that deploy.yaml still calls from /home/ajax/titanx/
-    for script in upload.sh generate-agetxt.sh mother-script.sh; do
-        if [[ -f "$SOURCE_DIR/$script" ]]; then
-            cp "$SOURCE_DIR/$script" "$PROJECT_DIR/"
-        elif [[ -f "$SOURCE_DIR/scripts/$script" ]]; then
-            cp "$SOURCE_DIR/scripts/$script" "$PROJECT_DIR/"
-        fi
+    # ALL root-level .sh files from bootstrap
+    for script in "$SOURCE_DIR"/*.sh; do
+        [[ -f "$script" ]] || continue
+        cp "$script" "$PROJECT_DIR/"
+        log "✓ Root script uploaded: $(basename "$script")"
     done
 
     log "✓ Fresh files copied"
