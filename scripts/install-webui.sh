@@ -49,14 +49,15 @@ add_caddy_and_compose() {
     log "Adding Web UI + Caddy to docker-compose.yml..."
 
     local compose_file="$DOCKER_DIR/docker-compose.yml"
+    [[ -f "$compose_file" ]] || error "docker-compose.yml not found"
 
-    # Check if web service already exists
+    # Skip if web service already exists
     if grep -qE "^  web:" "$compose_file" 2>/dev/null; then
-        log "✓ Web service already present, skipping"
+        log "✓ Web + Caddy services already present, skipping"
         return 0
     fi
 
-    # Append services safely
+    # Append web + caddy services
     cat >> "$compose_file" << EOF
 
   web:
@@ -81,17 +82,24 @@ add_caddy_and_compose() {
     networks:
       - titanx-net
     depends_on:
-      web:
-        condition: service_healthy
+      - web
 EOF
 
-    # Add volumes section only if it doesn't exist
-    if ! grep -q "^volumes:" "$compose_file" 2>/dev/null; then
-        echo "" >> "$compose_file"
+    # === ROBUST VOLUMES FIX ===
+    if grep -q "^volumes:" "$compose_file" 2>/dev/null; then
+        if ! grep -q "caddy_data:" "$compose_file" 2>/dev/null; then
+            # Insert under existing volumes: section safely
+            sed -i '/^volumes:/a\  caddy_data:' "$compose_file"
+            log "✓ Added caddy_data under existing volumes:"
+        fi
+    else
+        # Fallback - append at end
         cat >> "$compose_file" << 'EOF'
+
 volumes:
   caddy_data:
 EOF
+        log "✓ Created new volumes section"
     fi
 
     # Create Caddyfile
@@ -102,9 +110,8 @@ EOF
 }
 EOF
 
-    log "✓ Caddy + Web UI added successfully"
+    log "✅ Caddy + Web UI added successfully"
 }
-
 
 
 build_and_start() {
