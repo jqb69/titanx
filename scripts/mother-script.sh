@@ -141,9 +141,5 @@ log "Running installation scripts in order..."
 #./install-webui.sh       || error "install-web-ui.sh failed"   # ← Added
 
 log "========================================"
-log "✅ TITANX DEPLOYED ON NVMe STORAGE SUCCESSFULLY!"
+log "✅ TITANX ROOT INFRASTRUCTURE DEPLOYED SUCCESSFULLY!"
 log "========================================"
-
-# Final verification
-#verify_docker_final
-#print_app_logs
