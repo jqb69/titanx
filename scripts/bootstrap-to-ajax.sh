@@ -10,7 +10,7 @@ log() { echo "[BOOTSTRAP $(date '+%H:%M:%S')] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
 setup_ssh_key_access() {
-    log "Setting up new SSH key access for ajax user..."
+    log "Setting up SSH key access for ajax user..."
 
     local AJAX_SSH_DIR="/home/ajax/.ssh"
     local ROOT_SSH_DIR="/root/.ssh"
@@ -18,35 +18,36 @@ setup_ssh_key_access() {
     mkdir -p "$AJAX_SSH_DIR"
     chmod 700 "$AJAX_SSH_DIR"
 
-    # Copy private key (critical for ssh-action as ajax)
-    if [[ -f "$ROOT_SSH_DIR/id_ed25519" ]]; then
-        cp -f "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519"
-        cp -f "$ROOT_SSH_DIR/id_ed25519.pub" "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
-        log "✓ Copied SSH private key to ajax user"
-    else
-        log "⚠️ No id_ed25519 found in root - skipping copy"
+    # === FORCE KEY GENERATION IF MISSING ===
+    if [[ ! -f "$ROOT_SSH_DIR/id_ed25519" ]]; then
+        log "⚠️ No SSH key found in root. Generating new ed25519 key..."
+        ssh-keygen -t ed25519 -f "$ROOT_SSH_DIR/id_ed25519" -N "" -q
+        log "✓ New SSH key generated in root"
     fi
+
+    # Copy to ajax
+    cp -f "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519"
+    cp -f "$ROOT_SSH_DIR/id_ed25519.pub" "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
+
+    log "✓ Copied SSH private key to ajax user"
 
     # Setup authorized_keys
     if [[ -f "$ROOT_SSH_DIR/authorized_keys" ]]; then
         cp -f "$ROOT_SSH_DIR/authorized_keys" "$AJAX_SSH_DIR/authorized_keys" 2>/dev/null || true
     fi
 
-    # Ensure public key is in authorized_keys
     if [[ -f "$AJAX_SSH_DIR/id_ed25519.pub" ]]; then
         if ! grep -q -f "$AJAX_SSH_DIR/id_ed25519.pub" "$AJAX_SSH_DIR/authorized_keys" 2>/dev/null; then
             cat "$AJAX_SSH_DIR/id_ed25519.pub" >> "$AJAX_SSH_DIR/authorized_keys"
             log "✓ Added public key to authorized_keys"
-        else
-            log "✓ Public key already in authorized_keys"
         fi
     fi
 
-    # Fix permissions (very important)
+    # Fix permissions
     chown -R ajax:ajax "$AJAX_SSH_DIR"
-    chmod 600 "$AJAX_SSH_DIR/id_ed25519" 2>/dev/null || true
-    chmod 644 "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
-    chmod 600 "$AJAX_SSH_DIR/authorized_keys" 2>/dev/null || true
+    chmod 600 "$AJAX_SSH_DIR/id_ed25519"
+    chmod 644 "$AJAX_SSH_DIR/id_ed25519.pub"
+    chmod 600 "$AJAX_SSH_DIR/authorized_keys"
 
     log "✅ SSH key access configured for ajax user"
 }
