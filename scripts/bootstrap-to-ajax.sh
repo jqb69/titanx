@@ -10,7 +10,7 @@ log() { echo "[BOOTSTRAP $(date '+%H:%M:%S')] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
 setup_ssh_key_access() {
-    log "Setting up SSH key access for ajax user..."
+    log "Setting up new SSH key access for ajax user..."
 
     local AJAX_SSH_DIR="/home/ajax/.ssh"
     local ROOT_SSH_DIR="/root/.ssh"
@@ -18,13 +18,13 @@ setup_ssh_key_access() {
     mkdir -p "$AJAX_SSH_DIR"
     chmod 700 "$AJAX_SSH_DIR"
 
-    # Copy private key if missing or different
-    if [[ ! -f "$AJAX_SSH_DIR/id_ed25519" ]] || ! cmp -s "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519" 2>/dev/null; then
-        cp -f "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519" 2>/dev/null || true
+    # Copy private key (critical for ssh-action as ajax)
+    if [[ -f "$ROOT_SSH_DIR/id_ed25519" ]]; then
+        cp -f "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519"
         cp -f "$ROOT_SSH_DIR/id_ed25519.pub" "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
-        log "✓ Copied SSH private key to ajax"
+        log "✓ Copied SSH private key to ajax user"
     else
-        log "✓ SSH private key already up to date"
+        log "⚠️ No id_ed25519 found in root - skipping copy"
     fi
 
     # Setup authorized_keys
@@ -42,7 +42,7 @@ setup_ssh_key_access() {
         fi
     fi
 
-    # Fix permissions
+    # Fix permissions (very important)
     chown -R ajax:ajax "$AJAX_SSH_DIR"
     chmod 600 "$AJAX_SSH_DIR/id_ed25519" 2>/dev/null || true
     chmod 644 "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
