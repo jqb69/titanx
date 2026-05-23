@@ -25,7 +25,7 @@ purge_ghosts() {
     # Kill old override file
     rm -f "$PROJECT_DIR"/docker-compose.override.yml 2>/dev/null || true
     #kill all scripts top level
-    rm -f "$PROJECT_DIR"/*.sh
+    #rm -f "$PROJECT_DIR"/*.sh (culprit for ssh deletion do not include)
     # Wipe subdirectories completely — no overlay garbage survives
     rm -rf "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
     mkdir -p "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
