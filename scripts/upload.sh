@@ -24,19 +24,25 @@ purge_ghosts() {
 
     # Kill old override file
     rm -f "$PROJECT_DIR"/docker-compose.override.yml 2>/dev/null || true
-
+    #kill all scripts top level
+    rm -f "$PROJECT_DIR"/*.sh
     # Wipe subdirectories completely — no overlay garbage survives
     rm -rf "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
     mkdir -p "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
+    mkdir -p "$PROJECT_DIR/docker"
+    mkdir -p "$PROJECT_DIR/.hermes"
+    mkdir -p "$PROJECT_DIR/data"
+    mkdir -p "$PROJECT_DIR/workspace" 
 
     log "✓ Ghosts purged"
+    ls -a | { output=$(cat); log "$output"; }
 }
 
 copy_fresh() {
     log "Copying fresh files..."
 
     # Subdirectories
-    cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/"
+    cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/web/"
     cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/"
 
     # ALL root-level .sh files from bootstrap
@@ -51,6 +57,12 @@ copy_fresh() {
 
 set_permissions() {
     chown -R "$USER:$USER" "$PROJECT_DIR/scripts" "$PROJECT_DIR/web"
+    # 4. Secure the Web UI folder so Caddy and Streamlit can read it
+    if [[ -d "$PROJECT_DIR/web" ]]; then
+        chmod 755 "$PROJECT_DIR/web"
+        chmod 644 "$PROJECT_DIR/web/"* 2>/dev/null || true
+        log "✓ Web UI permissions secured"
+    fi
 
     # Root .sh files
     find "$PROJECT_DIR" -maxdepth 1 -type f -name "*.sh" -exec chmod +x {} \;
