@@ -35,7 +35,7 @@ purge_ghosts() {
     mkdir -p "$PROJECT_DIR/workspace" 
 
     log "✓ Ghosts purged"
-    ls -a | { output=$(cat); log "$output"; }
+    ls -a "$PROJECT_DIR" | { output=$(cat); log "$output"; }
 }
 
 copy_fresh() {
