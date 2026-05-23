@@ -24,24 +24,24 @@ setup_ssh_key_access() {
         ssh-keygen -t ed25519 -f "$ROOT_SSH_DIR/id_ed25519" -N "" -q
         log "✓ New SSH key generated"
     else
-        log "✓ Existing SSH key found"
+        log "✓ Existing SSH key found in root"
     fi
 
-    # Copy key to ajax
+    # Copy key to ajax user
     cp -f "$ROOT_SSH_DIR/id_ed25519" "$AJAX_SSH_DIR/id_ed25519"
     cp -f "$ROOT_SSH_DIR/id_ed25519.pub" "$AJAX_SSH_DIR/id_ed25519.pub" 2>/dev/null || true
+    log "✓ Copied SSH private key to ajax"
 
-    # === SAFE AUTHORIZED_KEYS (NO DUPLICATES) ===
+    # Setup authorized_keys safely (no duplicates)
     if [[ -f "$AJAX_SSH_DIR/id_ed25519.pub" ]]; then
         local pubkey
         pubkey=$(cat "$AJAX_SSH_DIR/id_ed25519.pub")
 
-        # Check if key already exists before appending
         if ! grep -qF "$pubkey" "$AJAX_SSH_DIR/authorized_keys" 2>/dev/null; then
             echo "$pubkey" >> "$AJAX_SSH_DIR/authorized_keys"
             log "✓ Added public key to authorized_keys"
         else
-            log "✓ Public key already present in authorized_keys"
+            log "✓ Public key already in authorized_keys"
         fi
     fi
 
@@ -53,7 +53,6 @@ setup_ssh_key_access() {
 
     log "✅ SSH key access configured for ajax user"
 }
-
 # ====================== MAIN ======================
 log "Starting transfer to ajax project directory..."
 
