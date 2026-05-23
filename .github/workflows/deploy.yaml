@@ -54,8 +54,7 @@ jobs:
             echo "=== TitanX App Deployment Started ==="
             # Run FRESH upload.sh from bootstrap — purges ghosts and copies new files
             /root/titanx-bootstrap/scripts/upload.sh
-            cd /home/ajax/titanx
-            # ./upload.sh /home/ajax/titanx
+            cd /home/ajax/titanx/scripts
             ./generate-agetxt.sh
             ./mother-script.sh
             echo "=== TitanX App Deployment Completed ==="
@@ -77,10 +76,8 @@ jobs:
           script: |
             set -euo pipefail
             echo "=== Deploy App Phase Started (as ajax) ==="
-
             cd /home/ajax/titanx/scripts
             ./deploy-app.sh
-
             echo "=== Deploy App Phase Completed ==="
         env:
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY }}
