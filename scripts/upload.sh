@@ -42,7 +42,7 @@ copy_fresh() {
     log "Copying fresh files..."
 
     # Subdirectories
-    cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/web/"
+    cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/scripts/"
     cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/"
 
     # ALL root-level .sh files from bootstrap
