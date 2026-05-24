@@ -137,6 +137,7 @@ install_age_early
 log "Running installation scripts in order..."
 ./create-ajax-user.sh     || error "create-ajax-user.sh failed"
 ./create-secrets.sh       || error "create-secrets.sh failed"
+./install-titanx-docker.sh --root || error "Docker root setup failed"
 
 
 log "========================================"
