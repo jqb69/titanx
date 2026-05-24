@@ -63,7 +63,7 @@ run_app_deployment() {
 
     cd "$PROJECT_DIR" || error "Cannot cd to $PROJECT_DIR"
 
-    ./install-titanx-docker.sh || error "install-titanx-docker.sh failed"
+    ./install-titanx-docker.sh --ajax || error "Docker app launch failed"
     ./install-webui.sh        || log "Web UI installation skipped (optional)"
 
     log "✅ Application deployment phase completed"
