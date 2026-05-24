@@ -61,7 +61,7 @@ print_app_logs() {
 run_app_deployment() {
     log "=== Starting Application Deployment Phase (as ajax) ==="
 
-    cd "$PROJECT_DIR" || error "Cannot cd to $PROJECT_DIR"
+    #cd "$PROJECT_DIR" || error "Cannot cd to $PROJECT_DIR"
 
     ./install-titanx-docker.sh --ajax || error "Docker app launch failed"
     ./install-webui.sh        || log "Web UI installation skipped (optional)"
