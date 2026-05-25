@@ -2,75 +2,66 @@
 # scripts/healthcheck.sh
 set -euo pipefail
 
-# ====================== CONFIG ======================
-PROJECT_DIR="${PROJECT_DIR:-/home/ajax/titanx}"
-DOCKER_DIR="${DOCKER_DIR:-${PROJECT_DIR}/docker}"
-WEB_PORT="${WEB_PORT:-8501}"
-HERMES_PORT="${HERMES_PORT:-8642}"
+PROJECT_DIR="/home/ajax/titanx"
+DOCKER_DIR="${PROJECT_DIR}/docker"
 
 log() { echo "[HEALTHCHECK $(date '+%H:%M:%S')] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
 
-# ====================== FUNCTIONS ======================
-
 check_docker_services() {
     log "Checking Docker services..."
-    # Natively change to the directory so Docker automatically merges the base and override files
-    cd "$DOCKER_DIR" || error "Failed to navigate to $DOCKER_DIR"
-    
-    # Check the actual service definitions rather than string matching the raw container name
-    if ! docker compose ps --format "{{.Service}}" | grep -q "hermes"; then
+    cd "$DOCKER_DIR"
+    docker compose ps
+    if ! docker compose ps --format "{{.Name}}" | grep -q "hermes"; then
         error "Hermes container is not running"
     fi
-    log "✓ Hermes container is running"
+    log "✓ Hermes is running"
 }
 
 check_streamlit() {
-    log "Waiting for Streamlit via Caddy (max 120s)..."
-
-    local timeout=120 waited=0 interval=5
+    log "Waiting for Streamlit via Caddy (max 90s)..."
+    local timeout=90 waited=0 interval=5
 
     while ! curl -sf http://localhost/_stcore/health > /dev/null 2>&1; do
         sleep "$interval"
         waited=$((waited + interval))
         if [ "$waited" -ge "$timeout" ]; then
             log "❌ Streamlit timeout - showing logs"
-            cd "$DOCKER_DIR"
             docker compose logs web --tail=30
             docker compose logs caddy --tail=20
-            error "Streamlit / Caddy failed to respond"
+            error "Streamlit / Caddy failed"
         fi
         log "Still waiting... ($waited/$timeout s)"
     done
     log "✅ Streamlit is reachable via Caddy"
 }
 
-check_caddy() {
-    log "Checking Caddy (HTTP)..."
-    # Caddy exposes public ports to the host, so host curl works perfectly here
-    if curl -sf http://localhost > /dev/null 2>&1; then
-        log "✅ Caddy HTTP is responding"
-    else
-        log "⚠️ Caddy HTTP not responding (may be using HTTPS only)"
-    fi
+print_final_summary() {
+    echo "========================================"
+    echo "✅ FULL TITANX DEPLOYMENT SUCCESSFUL!"
+    echo "========================================"
+    echo "Access URLs:"
+    echo "   Web UI (Chat) → https://YOUR_DROPLET_IP   ← Preferred (HTTPS)"
+    echo "   Alternative   → http://YOUR_DROPLET_IP"
+    echo "   Hermes API    → http://localhost:8642"
+    echo ""
+    echo "Next Steps:"
+    echo "1. Open browser → https://YOUR_DROPLET_IP"
+    echo "2. Type messages in the chat box"
+    echo "3. Hermes will respond through the Web UI"
+    echo ""
+    echo "Recent Logs:"
+    docker compose logs web --tail=10
+    docker compose logs caddy --tail=10
+    echo "========================================"
 }
 
-print_summary() {
-    log "========================================"
-    log "✅ ALL HEALTH CHECKS PASSED"
-    log "   Web UI     : http://YOUR_IP:$WEB_PORT"
-    log "   Hermes     : http://localhost:$HERMES_PORT"
-    log "========================================"
-}
-
-# ====================== MAIN ======================
 main() {
     log "=== TitanX Health Check Starting ==="
 
     check_docker_services
     check_streamlit
-    check_caddy
-    print_summary
+    print_final_summary
 
     log "Health check completed successfully"
 }
