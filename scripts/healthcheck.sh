@@ -26,23 +26,21 @@ check_docker_services() {
 }
 
 check_streamlit() {
-    log "Waiting for Streamlit Web UI (Internal Port 8501)..."
-    cd "$DOCKER_DIR" || error "Failed to navigate to $DOCKER_DIR"
-    local timeout=180 waited=0 interval=5
+    log "Waiting for Streamlit Web UI (max 90 seconds)..."
 
-    # Use docker compose exec -T web to ask Streamlit *inside* the container if it's healthy.
-    # This completely bypasses firewalls and host-level port blocks.
-    while ! docker compose exec -T web curl -sf "http://localhost:8501/_stcore/health" > /dev/null 2>&1; do
+    local timeout=90 waited=0 interval=3
+
+    while ! curl -sf http://localhost:8501/_stcore/health > /dev/null 2>&1; do
         sleep "$interval"
         waited=$((waited + interval))
         if [ "$waited" -ge "$timeout" ]; then
-            log "❌ Streamlit failed to start in time"
-            # Without the blinding -f flag, Docker successfully fetches the logs for 'web'
-            docker compose logs web --tail=30
-            error "Streamlit health check timeout"
+            log "❌ Streamlit timeout - showing recent logs"
+            docker compose logs web --tail=20
+            error "Streamlit failed to start in time"
         fi
+        log "Still waiting... ($waited/$timeout s)"
     done
-    log "✅ Streamlit is healthy"
+    log "✅ Streamlit is healthy and responding"
 }
 
 check_caddy() {
