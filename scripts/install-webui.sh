@@ -39,19 +39,23 @@ CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0
 EOF
 }
 
-add_caddy_and_compose() {
-    log "Creating docker-compose.override.yml for Web UI + Caddy..."
+add_caddy_override() {
+    log "Creating docker-compose.override.yml..."
 
     cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
 services:
   web:
     build: ${PROJECT_DIR}/web
+    container_name: titanx-web
     restart: unless-stopped
     networks:
       - titanx-net
+    depends_on:
+      - hermes
 
   caddy:
     image: caddy:2-alpine
+    container_name: caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -75,24 +79,25 @@ EOF
 }
 EOF
 
-    log "✅ docker-compose.override.yml created successfully"
+    log "✅ docker-compose.override.yml created"
 }
 
 build_and_start() {
     log "Building and starting Web UI + Caddy..."
     cd "$DOCKER_DIR"
-    # Docker automatically merges the base and override files.
-    docker compose up -d --build web caddy
+
+    # Explicit and reliable
+    docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build web caddy
+
     log "✅ Web UI + Caddy started successfully"
 }
 
-# ====================== MAIN ======================
 main() {
     log "=== Installing Web UI with Caddy ==="
 
     check_web_source
     create_requirements_and_dockerfile
-    add_caddy_and_compose
+    add_caddy_override
     build_and_start
 
     log "✅ Web UI installation completed"
