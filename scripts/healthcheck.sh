@@ -15,22 +15,30 @@ error() { echo "[ERROR] $*" >&2; exit 1; }
 
 check_docker_services() {
     log "Checking Docker services..."
-    if ! docker compose -f "$DOCKER_DIR/docker-compose.yml" ps --format "{{.Name}}" | grep -q "hermes"; then
+    # Natively change to the directory so Docker automatically merges the base and override files
+    cd "$DOCKER_DIR" || error "Failed to navigate to $DOCKER_DIR"
+    
+    # Check the actual service definitions rather than string matching the raw container name
+    if ! docker compose ps --format "{{.Service}}" | grep -q "hermes"; then
         error "Hermes container is not running"
     fi
     log "✓ Hermes container is running"
 }
 
 check_streamlit() {
-    log "Waiting for Streamlit Web UI (port $WEB_PORT)..."
+    log "Waiting for Streamlit Web UI (Internal Port 8501)..."
+    cd "$DOCKER_DIR" || error "Failed to navigate to $DOCKER_DIR"
     local timeout=180 waited=0 interval=5
 
-    while ! curl -sf "http://localhost:${WEB_PORT}/_stcore/health" > /dev/null 2>&1; do
+    # Use docker compose exec -T web to ask Streamlit *inside* the container if it's healthy.
+    # This completely bypasses firewalls and host-level port blocks.
+    while ! docker compose exec -T web curl -sf "http://localhost:8501/_stcore/health" > /dev/null 2>&1; do
         sleep "$interval"
         waited=$((waited + interval))
         if [ "$waited" -ge "$timeout" ]; then
             log "❌ Streamlit failed to start in time"
-            docker compose -f "$DOCKER_DIR/docker-compose.yml" logs web --tail=30
+            # Without the blinding -f flag, Docker successfully fetches the logs for 'web'
+            docker compose logs web --tail=30
             error "Streamlit health check timeout"
         fi
     done
@@ -39,6 +47,7 @@ check_streamlit() {
 
 check_caddy() {
     log "Checking Caddy (HTTP)..."
+    # Caddy exposes public ports to the host, so host curl works perfectly here
     if curl -sf http://localhost > /dev/null 2>&1; then
         log "✅ Caddy HTTP is responding"
     else
