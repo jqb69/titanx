@@ -52,6 +52,8 @@ services:
       - titanx-net
     depends_on:
       - hermes
+    environment:
+      - HERMES_URL=http://hermes:8642
 
   caddy:
     image: caddy:2-alpine
@@ -79,17 +81,14 @@ EOF
 }
 EOF
 
-    log "✅ docker-compose.override.yml created"
+    log "✅ override file created"
 }
 
 build_and_start() {
     log "Building and starting Web UI + Caddy..."
     cd "$DOCKER_DIR"
-
-    # Explicit and reliable
     docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build web caddy
-
-    log "✅ Web UI + Caddy started successfully"
+    log "✅ Web UI + Caddy started"
 }
 
 main() {
