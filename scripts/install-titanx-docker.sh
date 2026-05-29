@@ -124,18 +124,19 @@ services:
     networks:
       - titanx-net
 
-  hermes:
+   hermes:
     image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     user: "1000:1000"
-    env_file:
-      - hermes.env
     volumes:
       - ${HERMES_DATA}:/opt/data
       - ${PROJECT_DIR}/workspace:/workspace
       - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
     environment:
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
+      - MEMORY_BACKEND=redis
+      - TERMINAL_BACKEND=docker
       - WORKSPACE_DIR=/workspace
     ports:
       - "127.0.0.1:8642:8642"
@@ -144,7 +145,7 @@ services:
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
     networks:
       - titanx-net
-
+    
 volumes:
   redis_data:
 networks:
