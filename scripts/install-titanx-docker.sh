@@ -124,7 +124,7 @@ services:
     networks:
       - titanx-net
 
-   hermes:
+  hermes:
     image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
@@ -145,9 +145,10 @@ services:
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
     networks:
       - titanx-net
-    
+
 volumes:
   redis_data:
+
 networks:
   titanx-net:
     driver: bridge
