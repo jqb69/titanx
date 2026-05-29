@@ -7,6 +7,7 @@ if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
     echo "[ENTRYPOINT] Activating image virtual environment..."
     source "/opt/hermes/.venv/bin/activate"
 fi
+echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
 
-echo "[ENTRYPOINT] Launching Containerized Hermes Gateway Process. (entrpoint.sh)"
-exec hermes gateway run
+# CRITICAL: Force Hermes to listen on all interfaces
+exec hermes gateway run --host 0.0.0.0 --port 8642
