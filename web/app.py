@@ -3,13 +3,8 @@ import streamlit as st
 import requests
 import time
 
-st.set_page_config(
-    page_title="MIKIE", 
-    page_icon="⚡", 
-    layout="centered"
-)
+st.set_page_config(page_title="MIKIE", page_icon="⚡", layout="centered")
 
-# Black & White Clean Theme
 st.markdown("""
 <style>
     .stApp { background-color: #0a0a0a; color: #ffffff; }
@@ -18,16 +13,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ====================== HEALTH CHECK ======================
 @st.cache_resource(show_spinner=False)
 def check_hermes_health():
     try:
-        r = requests.get("http://hermes:8642/health", timeout=5)
+        r = requests.get("http://hermes:8642/health", timeout=8)
         return r.status_code == 200
     except:
         return False
 
-# ====================== SESSION ======================
 def init_session():
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -53,7 +46,7 @@ def send_message(prompt: str):
                 "http://hermes:8642/chat",
                 json={"message": prompt},
                 stream=True,
-                timeout=90
+                timeout=120
             ) as r:
                 for line in r.iter_lines():
                     if line:
