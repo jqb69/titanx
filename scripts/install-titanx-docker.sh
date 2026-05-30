@@ -94,7 +94,7 @@ configure_and_launch() {
     log "Preparing Docker configuration..."
     
     # Running as ajax, so files are naturally owned by ajax. No chown needed.
-    mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "${PROJECT_DIR}/workspace"
+    mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "${PROJECT_DIR}/workspace" "${PROJECT_DIR}/workspace/avangarde"
     chmod -R 770 "${PROJECT_DIR}/workspace"
     chmod 700 "$HERMES_DATA"
 
@@ -108,11 +108,45 @@ configure_and_launch() {
     chmod 600 "$env_file"
     log "✓ Secrets decrypted and locked down"
 
+    # Extract required values safely
     local redis_pass
+    local openrouter_model
     redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
+    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
+    
     [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
 
+    # === AUTO-GENERATE CONFIG.YAML ===
+    log "Generating hermes config.yaml..."
+    cat > "${HERMES_DATA}/config.yaml" << EOF
+model: ${openrouter_model}
+provider: openrouter
+EOF
+    chmod 644 "${HERMES_DATA}/config.yaml"
+
+    # === AUTO-GENERATE ENTRYPOINT.SH ===
+    if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
+        log "Creating minimal entrypoint.sh..."
+        cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
+#!/bin/bash
+
+set -euo pipefail
+
+# Activate the isolated Python virtual environment embedded inside the base image
+if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
+    echo "[ENTRYPOINT] Activating image virtual environment..."
+    source "/opt/hermes/.venv/bin/activate"
+fi
+echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
+
+# CRITICAL: Force Hermes to listen on all interfaces
+exec hermes gateway run --host 0.0.0.0 --port 8642
+EOF2
+    fi
+    chmod +x "${HERMES_DATA}/entrypoint.sh"
+
     # === GENERATE docker-compose.yml ===
+    log "Generating docker-compose.yml..."
     cat > "$DOCKER_DIR/docker-compose.yml" << EOF
 services:
   redis:
@@ -126,9 +160,11 @@ services:
 
   hermes:
     image: nousresearch/hermes-agent:latest
-    container_name: hermes
+    container_name: titanx-hermes
     restart: unless-stopped
     user: "1000:1000"
+    env_file:
+      - hermes.env
     volumes:
       - ${HERMES_DATA}:/opt/data
       - ${PROJECT_DIR}/workspace:/workspace
@@ -140,6 +176,30 @@ services:
       - WORKSPACE_DIR=/workspace
     ports:
       - "127.0.0.1:8642:8642"
+    depends_on:
+      - redis
+    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
+    networks:
+      - titanx-net
+
+  hermes-avangarde:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-avangarde
+    restart: unless-stopped
+    user: "1000:1000"
+    env_file:
+      - hermes.env
+    volumes:
+      - ${HERMES_DATA}:/opt/data
+      - ${PROJECT_DIR}/workspace/avangarde:/workspace
+      - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
+    environment:
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
+      - MEMORY_BACKEND=redis
+      - TERMINAL_BACKEND=docker
+      - WORKSPACE_DIR=/workspace
+    ports:
+      - "127.0.0.1:8643:8642"
     depends_on:
       - redis
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
