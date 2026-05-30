@@ -16,7 +16,7 @@ st.markdown("""
 @st.cache_resource(show_spinner=False)
 def check_hermes_health():
     try:
-        r = requests.get("http://hermes:8642/health", timeout=8)
+        r = requests.get("http://titanx-hermes:8642/health", timeout=8)
         return r.status_code == 200
     except:
         return False
@@ -43,7 +43,7 @@ def send_message(prompt: str):
         
         try:
             with requests.post(
-                "http://hermes:8642/chat",
+                "http://titanx-hermes:8642/chat",
                 json={"message": prompt},
                 stream=True,
                 timeout=120
