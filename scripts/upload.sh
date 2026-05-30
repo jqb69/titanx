@@ -44,7 +44,7 @@ copy_fresh() {
     # Subdirectories
     cp -a "$SOURCE_DIR/scripts/." "$PROJECT_DIR/scripts/"
     cp -a "$SOURCE_DIR/web/." "$PROJECT_DIR/web/"
-
+    cp -f "$SOURCE_DIR/scripts/entrypoint.sh" "$PROJECT_DIR/.hermes/"
     # ALL root-level .sh files from bootstrap
     for script in "$SOURCE_DIR"/*.sh; do
         [[ -f "$script" ]] || continue
@@ -69,7 +69,7 @@ set_permissions() {
 
     # Scripts dir
     chmod +x "$PROJECT_DIR/scripts"/*.sh 2>/dev/null || true
-
+    chmod +x "$PROJECT_DIR/.hermes"/*.sh 2>/dev/null || true
     log "✓ Permissions set"
 }
 
