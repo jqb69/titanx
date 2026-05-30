@@ -13,7 +13,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(ttl=60)
 def check_hermes_health():
     try:
         r = requests.get("http://titanx-hermes:8642/health", timeout=8)
