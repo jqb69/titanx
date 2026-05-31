@@ -53,7 +53,7 @@ services:
     depends_on:
       - hermes
     environment:
-      - HERMES_URL=http://titanx-hermes:8642
+      - HERMES_URL=http://hermes:8642
 
   caddy:
     image: caddy:2-alpine
