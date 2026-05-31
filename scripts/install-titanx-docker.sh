@@ -217,7 +217,7 @@ EOF
     cleanup_stale_docker
     log "Starting Hermes + Redis..."
     cd "$DOCKER_DIR"
-    docker compose up -d --force-recreate
+    docker compose -f docker-compose.yml up -d --build --force-recreate redis hermes hermes-avangarde
     log "✅ Services started successfully"
 }
 
