@@ -51,7 +51,7 @@ services:
     networks:
       - titanx-net
     depends_on:
-      - titanx-hermes
+      - hermes
     environment:
       - HERMES_URL=http://titanx-hermes:8642
 
