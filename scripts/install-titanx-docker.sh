@@ -113,12 +113,12 @@ configure_and_launch() {
     local openrouter_model
     redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
     openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
-    local API_SERVER_KEY
+    local API_KEY
     [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
     # Generate API_SERVER_KEY if missing
     if ! grep -q "API_SERVER_KEY=" "$env_file" 2>/dev/null; then
         API_KEY=$(openssl rand -hex 32)
-        echo "API_SERVER_KEY=$API_KEY" >> "$env_file"
+        echo "API_KEY=$API_KEY" >> "$env_file"
         log "✓ Generated API_SERVER_KEY for Hermes"
     fi
     # === AUTO-GENERATE CONFIG.YAML ===
@@ -178,6 +178,7 @@ services:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
+      - API_SERVER_KEY=${API_KEY}
       - WORKSPACE_DIR=/workspace
     ports:
       - "127.0.0.1:8642:8642"
@@ -202,7 +203,7 @@ services:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=${API_SERVER_KEY}
+      - API_SERVER_KEY=${API_KEY}
       - WORKSPACE_DIR=/workspace
     ports:
       - "127.0.0.1:8643:8642"
