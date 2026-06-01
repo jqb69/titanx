@@ -10,4 +10,4 @@ fi
 echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
 
 # CRITICAL: Force Hermes to listen on all interfaces
-exec hermes gateway run --host 0.0.0.0 --port 8642
+exec hermes gateway run 
