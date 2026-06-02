@@ -113,11 +113,11 @@ configure_and_launch() {
     local openrouter_model
     redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
     openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
-    local API_KEY
+    local API_KEY=${API_SERVER_KEY}
     [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
     # Generate API_SERVER_KEY if missing
     if ! grep -q "API_SERVER_KEY=" "$env_file" 2>/dev/null; then
-        API_KEY=$(openssl rand -hex 32)
+        #API_KEY=$(openssl rand -hex 32)
         echo "API_KEY=$API_KEY" >> "$env_file"
         log "✓ Generated API_SERVER_KEY for Hermes"
     fi
