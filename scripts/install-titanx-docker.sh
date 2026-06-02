@@ -85,7 +85,7 @@ setup_ufw() {
 
 cleanup_stale_docker() {
     log "Cleaning stale containers..."
-    docker rm -f $(docker ps -a --format '{{.Names}}' | grep -E 'hermes|redis' || true) 2>/dev/null || true
+    docker rm -f $(docker ps -a --format '{{.Names}}' | grep -E 'hermes|redis|web|caddy|titanx-web' || true) 2>/dev/null || true
     docker network rm titanx-net 2>/dev/null || true
     log "✓ Stale resources cleaned"
 }
