@@ -186,6 +186,8 @@ services:
       - TERMINAL_BACKEND=docker
       - API_SERVER_KEY=${API_KEY}
       - WORKSPACE_DIR=/workspace
+      - HOST=0.0.0.0          
+      - PORT=8642
     ports:
       - "127.0.0.1:8642:8642"
     depends_on:
@@ -211,6 +213,8 @@ services:
       - TERMINAL_BACKEND=docker
       - API_SERVER_KEY=${API_KEY}
       - WORKSPACE_DIR=/workspace
+      - HOST=0.0.0.0          
+      - PORT=8642
     ports:
       - "127.0.0.1:8643:8642"
     depends_on:
