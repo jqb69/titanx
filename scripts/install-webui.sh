@@ -92,16 +92,17 @@ EOF
     auto_https disable_redirects
 }
 
-http:// {
+:80 {
     reverse_proxy web:8501
 }
 
-https:// {
+:443 {
     tls internal
     reverse_proxy web:8501
 }
 EOF
-    log "✅ override file created"
+
+    log "✅ docker-compose.override.yml created with Python healthcheck"
 }
 
 build_and_start() {
