@@ -123,7 +123,7 @@ configure_and_launch() {
         log "✓ Generated new API_SERVER_KEY"
     fi
     
-    if ! grep -q "API_SERVER_KEY=" "$env_file" 2>/dev/null; then
+    if ! grep -q "^API_KEY=" "$env_file" 2>/dev/null; then
         echo "API_KEY=$API_KEY" >> "$env_file"
         log "✓ Generated API_SERVER_KEY for Hermes"
     fi
