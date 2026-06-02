@@ -62,11 +62,11 @@ run_app_deployment() {
     log "=== Starting Application Deployment Phase (as ajax) ==="
 
     # === API_SERVER_KEY Handling ===
-    if [[ -z "${API_KEY:-}" ]]; then
-        export API_KEY=$(openssl rand -hex 32)
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+        export API_SERVER_KEY=$(openssl rand -hex 32)
         log "✓ Generated and exported new API_SERVER_KEY"
     else
-        export API_KEY
+        export API_SERVER_KEY
         log "✓ Using existing API_SERVER_KEY"
     fi
 
