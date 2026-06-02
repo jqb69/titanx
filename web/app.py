@@ -54,13 +54,26 @@ def send_message(prompt: str):
                 stream=True,
                 timeout=120
             ) as r:
-                for line in r.iter_lines():
-                    if line:
-                        chunk = line.decode('utf-8', errors='ignore')
+                if not r.ok:
+                    # Graceful display instead of raising
+                    error_msg = f"❌ Hermes API Error: {r.status_code} {r.reason}"
+                    if r.text:
+                        error_msg += f" - {r.text[:150]}"
+                    full_response = error_msg
+                else:
+                    for line in r.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            chunk = line[len("data:"):].lstrip()
+                        else:
+                            chunk = line
                         full_response += chunk
                         placeholder.markdown(full_response + "▌")
         except requests.exceptions.ConnectionError:
             full_response = "❌ Cannot connect to Hermes backend."
+        except requests.RequestException as e:
+            full_response = f"❌ Network error contacting Hermes: {e}"  
         except requests.exceptions.Timeout:
             full_response = "⏱️ Request timed out."
         except Exception as e:
