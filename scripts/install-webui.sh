@@ -40,9 +40,23 @@ EOF
 }
 
 add_caddy_override() {
-    log "Creating docker-compose.override.yml..."
+    log "Creating docker-compose.override.yml (API_KEY sync + clean merge)..."
 
-   cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
+    # Read the actual key name used in hermes.env
+    local api_key=""
+    if [[ -f "$DOCKER_DIR/hermes.env" ]]; then
+        api_key=$(grep "^API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
+    fi
+
+    if [[ -z "$api_key" ]]; then
+        api_key=$(openssl rand -hex 32)
+        echo "API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
+        log "✓ Generated new API_KEY and appended to hermes.env"
+    else
+        log "✓ Loaded existing API_KEY from hermes.env"
+    fi
+
+    cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
 services:
   web:
     build: ${PROJECT_DIR}/web
@@ -54,13 +68,13 @@ services:
       - hermes
     environment:
       - HERMES_URL=http://titanx-hermes:8642
-      - HERMES_API_KEY=${API_SERVER_KEY}
+      - HERMES_API_KEY=${api_key}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 70s
+      retries: 5
+      start_period: 90s
 
   caddy:
     image: caddy:2-alpine
@@ -82,10 +96,6 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-
-networks:
-  titanx-net:
-    external: false
 EOF
 
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
@@ -103,7 +113,7 @@ EOF
 }
 EOF
 
-    log "✅ docker-compose.override.yml created with Python healthcheck"
+    log "✅ Override created with synced HERMES_API_KEY"
 }
 
 build_and_start() {
