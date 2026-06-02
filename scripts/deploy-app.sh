@@ -61,7 +61,14 @@ print_app_logs() {
 run_app_deployment() {
     log "=== Starting Application Deployment Phase (as ajax) ==="
 
-    #cd "$PROJECT_DIR" || error "Cannot cd to $PROJECT_DIR"
+    # === API_SERVER_KEY Handling ===
+    if [[ -z "${API_KEY:-}" ]]; then
+        export API_KEY=$(openssl rand -hex 32)
+        log "✓ Generated and exported new API_SERVER_KEY"
+    else
+        export API_KEY
+        log "✓ Using existing API_SERVER_KEY"
+    fi
 
     ./install-titanx-docker.sh --ajax || error "Docker app launch failed"
     ./install-webui.sh        || log "Web UI installation skipped (optional)"
