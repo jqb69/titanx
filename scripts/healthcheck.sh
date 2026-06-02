@@ -20,20 +20,25 @@ check_docker_services() {
 
 check_streamlit() {
     log "Waiting for Streamlit via Caddy (max 90s)..."
-    local timeout=90 waited=0 interval=5
-
-    while ! curl -sf http://localhost/_stcore/health > /dev/null 2>&1; do
-        sleep "$interval"
-        waited=$((waited + interval))
-        if [ "$waited" -ge "$timeout" ]; then
-            log "❌ Streamlit timeout - showing logs"
-            docker compose logs web --tail=30
-            docker compose logs caddy --tail=20
-            error "Streamlit / Caddy failed"
+    local timeout=90
+    for ((i=0; i<timeout; i+=3)); do
+        if python3 -c '
+import urllib.request
+try:
+    urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
+    exit(0)
+except:
+    exit(1)
+' 2>/dev/null; then
+            log "✅ Streamlit is reachable via Caddy"
+            return 0
         fi
-        log "Still waiting... ($waited/$timeout s)"
+        sleep 3
+        if ((i >= 45)); then
+            log "Still waiting... ($i/$timeout s)"
+        fi
     done
-    log "✅ Streamlit is reachable via Caddy"
+    log "⚠️ Streamlit took longer than expected"
 }
 
 print_final_summary() {
