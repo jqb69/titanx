@@ -60,7 +60,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 70s
 
   caddy:
     image: caddy:2-alpine
@@ -76,7 +76,8 @@ services:
     networks:
       - titanx-net
     depends_on:
-      - web
+      web:
+        condition: service_healthy
 
 volumes:
   caddy_data:
