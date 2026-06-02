@@ -42,7 +42,7 @@ EOF
 add_caddy_override() {
     log "Creating docker-compose.override.yml..."
 
-    cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
+   cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
 services:
   web:
     build: ${PROJECT_DIR}/web
@@ -51,9 +51,16 @@ services:
     networks:
       - titanx-net
     depends_on:
-      - hermes
+      - titanx-hermes
     environment:
       - HERMES_URL=http://titanx-hermes:8642
+      - HERMES_API_KEY=${API_SERVER_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   caddy:
     image: caddy:2-alpine
@@ -65,6 +72,7 @@ services:
     volumes:
       - ${DOCKER_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+      - caddy_config:/config
     networks:
       - titanx-net
     depends_on:
@@ -72,15 +80,27 @@ services:
 
 volumes:
   caddy_data:
+  caddy_config:
+
+networks:
+  titanx-net:
+    external: false
 EOF
 
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
-:80, :443 {
+{
+    auto_https disable_redirects
+}
+
+http:// {
     reverse_proxy web:8501
+}
+
+https:// {
     tls internal
+    reverse_proxy web:8501
 }
 EOF
-
     log "✅ override file created"
 }
 
