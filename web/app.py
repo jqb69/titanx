@@ -2,6 +2,7 @@
 import streamlit as st
 import requests
 import time
+import os
 
 st.set_page_config(page_title="MIKIE", page_icon="⚡", layout="centered")
 
@@ -12,11 +13,14 @@ st.markdown("""
     h1 { color: #ffffff; text-align: center; font-weight: 300; }
 </style>
 """, unsafe_allow_html=True)
+HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642")
+HERMES_API_KEY = os.getenv("HERMES_API_KEY")
 
 @st.cache_resource(ttl=60)
 def check_hermes_health():
     try:
-        r = requests.get("http://titanx-hermes:8642/health", timeout=8)
+        headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
+        r = requests.get(f"{HERMES_URL}/health", headers=headers, timeout=8)
         return r.status_code == 200
     except:
         return False
@@ -42,9 +46,11 @@ def send_message(prompt: str):
         full_response = ""
         
         try:
+            headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
             with requests.post(
-                "http://titanx-hermes:8642/chat",
+                f"{HERMES_URL}/chat",
                 json={"message": prompt},
+                headers=headers,
                 stream=True,
                 timeout=120
             ) as r:
