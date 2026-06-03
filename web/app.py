@@ -37,39 +37,36 @@ def display_messages():
 
 def send_message(prompt: str):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full_response = ""
-        
+
+        headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
+        endpoints = ["/chat", "/api/chat", "/v1/chat", "/"]
+
         try:
-            headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
-            with requests.post(
-                f"{HERMES_URL}/chat",
-                json={"message": prompt},
-                headers=headers,
-                stream=True,
-                timeout=120
-            ) as r:
-                if not r.ok:
-                    # Graceful display instead of raising
-                    error_msg = f"❌ Hermes API Error: {r.status_code} {r.reason}"
-                    if r.text:
-                        error_msg += f" - {r.text[:150]}"
-                    full_response = error_msg
-                else:
-                    for line in r.iter_lines(decode_unicode=True):
-                        if not line:
-                            continue
-                        if line.startswith("data:"):
-                            chunk = line[len("data:"):].lstrip()
-                        else:
-                            chunk = line
-                        full_response += chunk
-                        placeholder.markdown(full_response + "▌")
+            for endpoint in endpoints:
+                url = f"{HERMES_URL}{endpoint}"
+                with requests.post(
+                    url,
+                    json={"message": prompt},
+                    headers=headers,
+                    stream=True,
+                    timeout=90
+                ) as r:
+                    if r.status_code == 200:
+                        for line in r.iter_lines(decode_unicode=True):
+                            if line:
+                                chunk = line[len("data: "):].lstrip() if line.startswith("data:") else line
+                                full_response += chunk
+                                placeholder.markdown(full_response + "▌")
+                        return  # Success
+                    elif r.status_code != 404:
+                        full_response = f"❌ Hermes Error: {r.status_code} {r.reason}"
+                        break
         except requests.exceptions.ConnectionError:
             full_response = "❌ Cannot connect to Hermes backend."
         except requests.RequestException as e:
