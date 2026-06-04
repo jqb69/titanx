@@ -45,14 +45,18 @@ def send_message(prompt: str):
         full_response = ""
 
         headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
-        endpoints = ["/", "/chat", "/api/chat", "/v1/chat", "/message"]
+        endpoints = ["/", "v1/chat/completions","/chat", "/api/chat", "/v1/chat", "/message"]
 
         try:
             for endpoint in endpoints:
-                url = f"{HERMES_URL}{endpoint}"
+                url = f"{HERMES_URL}/v1/chat/completions"
                 with requests.post(
                     url,
-                    json={"message": prompt},
+                    json={
+                        "model": "hermes",           # or any model name Hermes accepts
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": True
+                    },
                     headers=headers,
                     stream=True,
                     timeout=90
@@ -61,16 +65,22 @@ def send_message(prompt: str):
                         for line in r.iter_lines(decode_unicode=True):
                             if not line:
                                 continue
-                            # Handle SSE "data:" format if present
-                            chunk = line[len("data:"):].lstrip() if line.startswith("data:") else line
-                            full_response += chunk
+                            if line.startswith("data:"):
+                                if line.strip() == "data: [DONE]":
+                                    break
+                                try:
+                                    chunk = line[len("data:"):].strip()
+                                    if chunk:
+                                        full_response += chunk  # You can parse delta.content for cleaner text if needed
+                                except:
+                                    pass
                             placeholder.markdown(full_response + "▌")
-                        return  # Success - stop trying other endpoints
+                            break  # Success - break loop idiot stop trying other endpoints
 
                     else:
                         # Show detailed error from first non-404 response
                         full_response = f"❌ Hermes Error {r.status_code}: {r.reason}\n{r.text[:250]}"
-                        break  # Stop on real error (not just 404)
+                        continue  # Stop on real error (not just 404)
 
             # If we exhausted all endpoints without success
             if not full_response:
