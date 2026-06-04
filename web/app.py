@@ -3,6 +3,8 @@ import streamlit as st
 import requests
 import time
 import os
+import json
+from typing import Optional
 
 st.set_page_config(page_title="MIKIE", page_icon="⚡", layout="centered")
 
@@ -35,6 +37,59 @@ def display_messages():
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+ # ====================== HELPER ======================
+def post_to_hermes(url, headers, prompt, placeholder):
+    """Helper to post to Hermes and stream response"""
+    full_response = ""
+
+    try:
+        with requests.post(
+            url,
+            json={
+                "model": "hermes",
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": True
+            },
+            headers=headers,
+            stream=True,
+            timeout=(5, 120)
+        ) as r:
+            # Catch bad endpoints immediately
+            if r.status_code != 200:
+                return f"❌ Hermes Error {r.status_code}: {r.reason}\n{r.text[:300]}"
+
+            for raw in r.iter_lines(decode_unicode=True):
+                if not raw or raw.strip() == "data: [DONE]":
+                    continue
+
+                if raw.startswith("data:"):
+                    chunk = raw[len("data:"):].strip()
+                else:
+                    chunk = raw.strip()
+
+                if not chunk:
+                    continue
+
+                try:
+                    data = json.loads(chunk)
+                    content = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if content:
+                        full_response += content
+                        placeholder.markdown(full_response + "▌")
+                except json.JSONDecodeError:
+                    continue  # Skip garbage / HTML responses
+                except Exception:
+                    continue  # Skip any parsing error
+
+    except requests.exceptions.ConnectionError:
+        return f"❌ Cannot connect to Hermes at {url}"
+    except requests.exceptions.Timeout:
+        return "⏱️ Request timed out."
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+    return full_response or "❌ Hermes returned no content. Check backend logs."
+
 def send_message(prompt: str):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -42,57 +97,26 @@ def send_message(prompt: str):
 
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        full_response = ""
 
         headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
-        endpoints = ["/", "v1/chat/completions","/chat", "/api/chat", "/v1/chat", "/message"]
-
-        try:
-            for endpoint in endpoints:
-                url = f"{HERMES_URL}/v1/chat/completions"
-                with requests.post(
-                    url,
-                    json={
-                        "model": "hermes",           # or any model name Hermes accepts
-                        "messages": [{"role": "user", "content": prompt}],
-                        "stream": True
-                    },
-                    headers=headers,
-                    stream=True,
-                    timeout=90
-                ) as r:
-                    if r.status_code == 200:
-                        for line in r.iter_lines(decode_unicode=True):
-                            if not line:
-                                continue
-                            if line.startswith("data:"):
-                                if line.strip() == "data: [DONE]":
-                                    break
-                                try:
-                                    chunk = line[len("data:"):].strip()
-                                    if chunk:
-                                        full_response += chunk  # You can parse delta.content for cleaner text if needed
-                                except:
-                                    pass
-                            placeholder.markdown(full_response + "▌")
-                            break  # Success - break loop idiot stop trying other endpoints
-
-                    else:
-                        # Show detailed error from first non-404 response
-                        full_response = f"❌ Hermes Error {r.status_code}: {r.reason}\n{r.text[:250]}"
-                        continue  # Stop on real error (not just 404)
-
-            # If we exhausted all endpoints without success
-            if not full_response:
-                full_response = f"❌ Hermes returned 404 on all tested endpoints at {HERMES_URL}"
-
-        except requests.exceptions.ConnectionError:
-            full_response = f"❌ Cannot connect to Hermes at {HERMES_URL}"
-        except requests.exceptions.Timeout:
-            full_response = "⏱️ Request timed out."
-        except Exception as e:
-            full_response = f"❌ Unexpected error: {e}"
-
+        
+        # CRITICAL FIX: /v1/chat/completions is forced to the top of the hierarchy
+        endpoints = ["/v1/chat/completions", "/", "/chat", "/api/chat", "/v1/chat", "/message"]
+        
+        full_response: Optional[str] = None
+        for endpoint in endpoints:
+            url = HERMES_URL.rstrip("/") + endpoint
+            resp = post_to_hermes(url, headers, prompt, placeholder)
+            
+            # If we get a valid response that isn't an error block, lock it in and break
+            if resp and not resp.startswith("❌"):
+                full_response = resp
+                break
+            
+            # Keep last error if none succeed
+            full_response = resp
+        
+        # Final render without the cursor block
         placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
