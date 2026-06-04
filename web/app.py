@@ -45,7 +45,7 @@ def send_message(prompt: str):
         full_response = ""
 
         headers = {"Authorization": f"Bearer {HERMES_API_KEY}"} if HERMES_API_KEY else {}
-        endpoints = ["/chat", "/api/chat", "/v1/chat", "/"]
+        endpoints = ["/", "/chat", "/api/chat", "/v1/chat", "/message"]
 
         try:
             for endpoint in endpoints:
@@ -59,22 +59,29 @@ def send_message(prompt: str):
                 ) as r:
                     if r.status_code == 200:
                         for line in r.iter_lines(decode_unicode=True):
-                            if line:
-                                chunk = line[len("data: "):].lstrip() if line.startswith("data:") else line
-                                full_response += chunk
-                                placeholder.markdown(full_response + "▌")
-                        return  # Success
-                    elif r.status_code != 404:
-                        full_response = f"❌ Hermes Error: {r.status_code} {r.reason}"
-                        break
+                            if not line:
+                                continue
+                            # Handle SSE "data:" format if present
+                            chunk = line[len("data:"):].lstrip() if line.startswith("data:") else line
+                            full_response += chunk
+                            placeholder.markdown(full_response + "▌")
+                        return  # Success - stop trying other endpoints
+
+                    else:
+                        # Show detailed error from first non-404 response
+                        full_response = f"❌ Hermes Error {r.status_code}: {r.reason}\n{r.text[:250]}"
+                        break  # Stop on real error (not just 404)
+
+            # If we exhausted all endpoints without success
+            if not full_response:
+                full_response = f"❌ Hermes returned 404 on all tested endpoints at {HERMES_URL}"
+
         except requests.exceptions.ConnectionError:
-            full_response = "❌ Cannot connect to Hermes backend."
-        except requests.RequestException as e:
-            full_response = f"❌ Network error contacting Hermes: {e}"  
+            full_response = f"❌ Cannot connect to Hermes at {HERMES_URL}"
         except requests.exceptions.Timeout:
             full_response = "⏱️ Request timed out."
         except Exception as e:
-            full_response = f"❌ Error: {e}"
+            full_response = f"❌ Unexpected error: {e}"
 
         placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
