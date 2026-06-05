@@ -90,74 +90,11 @@ cleanup_stale_docker() {
     log "✓ Stale resources cleaned"
 }
 
-configure_and_launch() {
-    log "Preparing Docker configuration..."
-    
-    # Running as ajax, so files are naturally owned by ajax. No chown needed.
-    mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "${PROJECT_DIR}/workspace" "${PROJECT_DIR}/workspace/avangarde"
-    chmod -R 770 "${PROJECT_DIR}/workspace"
-    chmod 700 "$HERMES_DATA"
+write_docker_compose() {
+    local redis_pass="$1"
+    local api_key="$2"
 
-    # === HOST-SIDE DECRYPTION (Native Ajax Context) ===
-    local env_file="${DOCKER_DIR}/hermes.env"
-    log "Decrypting secrets natively as $USER..."
-
-    if ! age -d -i ~/.ssh/id_ed25519 "$SECRETS_AGE" > "$env_file" 2>/dev/null; then
-        error "Failed to decrypt secrets.age"
-    fi
-    chmod 600 "$env_file"
-    log "✓ Secrets decrypted and locked down"
-
-    # Extract required values safely
-    local redis_pass
-    local openrouter_model
-    redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
-    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
-    local API_KEY=${API_SERVER_KEY}
-    [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD"
-    # Generate API_KEY if missing
-    if [[ -z "${API_SERVER_KEY:-}" ]]; then
-        API_KEY=$(openssl rand -hex 32)
-        API_SERVER_KEY=$API_KEY
-        export API_SERVER_KEY
-        log "✓ Generated new API_SERVER_KEY"
-    fi
-    
-    if ! grep -q "^API_KEY=" "$env_file" 2>/dev/null; then
-        echo "API_KEY=$API_KEY" >> "$env_file"
-        log "✓ Generated API_SERVER_KEY for Hermes"
-    fi
-    # === AUTO-GENERATE CONFIG.YAML ===
-    log "Generating hermes config.yaml..."
-    cat > "${HERMES_DATA}/config.yaml" << EOF
-model: ${openrouter_model}
-provider: openrouter
-EOF
-    chmod 644 "${HERMES_DATA}/config.yaml"
-
-    # === AUTO-GENERATE ENTRYPOINT.SH ===
-    if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
-        log "Creating minimal entrypoint.sh..."
-        cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
-#!/bin/bash
-
-set -euo pipefail
-
-# Activate the isolated Python virtual environment embedded inside the base image
-if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
-    echo "[ENTRYPOINT] Activating image virtual environment..."
-    source "/opt/hermes/.venv/bin/activate"
-fi
-echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
-
-# CRITICAL: Force Hermes to listen on all interfaces
-exec hermes gateway run --host 0.0.0.0 --port 8642
-EOF2
-    fi
-    chmod +x "${HERMES_DATA}/entrypoint.sh"
-
-    # === GENERATE docker-compose.yml ===
-    log "Generating docker-compose.yml..."
+    log "Generating modular docker-compose.yml..."
     cat > "$DOCKER_DIR/docker-compose.yml" << EOF
 services:
   redis:
@@ -184,7 +121,7 @@ services:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=${API_KEY}
+      - API_SERVER_KEY=${api_key}
       - WORKSPACE_DIR=/workspace
       - HOST=0.0.0.0          
       - PORT=8642
@@ -211,7 +148,7 @@ services:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=${API_KEY}
+      - API_SERVER_KEY=${api_key}
       - WORKSPACE_DIR=/workspace
       - HOST=0.0.0.0          
       - PORT=8642
@@ -230,13 +167,108 @@ networks:
   titanx-net:
     driver: bridge
 EOF
-
-    cleanup_stale_docker
-    log "Starting Hermes + Redis..."
-    cd "$DOCKER_DIR"
-    docker compose -f docker-compose.yml up -d --build --force-recreate redis hermes hermes-avangarde
-    log "✅ Services started successfully"
+    chmod 644 "$DOCKER_DIR/docker-compose.yml"
+    log "✓ File docker-compose.yml generated successfully"
 }
+
+configure_and_launch() {
+    log "Preparing Docker configuration and workspaces for MIKIE..."
+
+    # 1. Path Definitions
+    local workspace_main="${PROJECT_DIR}/workspace"
+    local workspace_avangarde="${workspace_main}/avangarde"
+    local env_file="${DOCKER_DIR}/hermes.env"
+
+    # 2. Create ALL directory structures FIRST (Natively as ajax)
+    log "Initializing directory structures..."
+    mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "$workspace_main" "$workspace_avangarde"
+
+    # 3. Permissions: Secure .hermes data (completely private to host ajax only)
+    chmod 700 "$HERMES_DATA"
+
+    # 4. Shared Workspace Access via SGID Group Inheritance (NO chown, NO sudo)
+    log "Enforcing SGID permission mapping..."
+    chmod 2770 "$workspace_main" "$workspace_avangarde"
+    find "$workspace_main" -type d -exec chmod 2770 {} + 2>/dev/null || true
+
+    # 5. Repair any existing files inside workspace to be group-writable
+    log "Repairing file permission bits..."
+    find "$workspace_main" -type f ! -perm /g+w -exec chmod g+w {} + 2>/dev/null || true
+
+    # 6. HOST-SIDE DECRYPTION (Native Ajax Context)
+    log "Decrypting secrets natively as $USER..."
+    if ! age -d -i ~/.ssh/id_ed25519 "$SECRETS_AGE" > "$env_file" 2>/dev/null; then
+        error "Failed to decrypt secrets.age"
+    fi
+    chmod 600 "$env_file"
+    log "✓ Secrets decrypted and locked down"
+
+    # 7. Extract foundational backend variables safely
+    local redis_pass
+    local openrouter_model
+    redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
+    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
+    
+    [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD from hermes.env"
+
+    # 8. Un-Sloppy API Key Handling: Check memory state first
+    local API_KEY
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+        API_KEY=$(openssl rand -hex 32)
+        API_SERVER_KEY="$API_KEY"
+        export API_SERVER_KEY
+        log "✓ Generated new API_SERVER_KEY"
+    else
+        API_KEY="$API_SERVER_KEY"
+        log "✓ Reusing in-memory API_SERVER_KEY"
+    fi
+
+    # Append key to file ONLY if it is absent to prevent infinite file growing loops
+    if ! grep -q "^API_KEY=" "$env_file" 2>/dev/null; then
+        echo "API_KEY=$API_KEY" >> "$env_file"
+        log "✓ Appended API_SERVER_KEY to hermes.env"
+    fi
+
+    # 9. Idempotent Config Generation
+    log "Validating configurations..."
+    if [[ ! -f "${HERMES_DATA}/config.yaml" ]]; then
+        cat > "${HERMES_DATA}/config.yaml" << EOF
+model: ${openrouter_model}
+provider: openrouter
+EOF
+        chmod 644 "${HERMES_DATA}/config.yaml"
+        log "✓ Generated config.yaml"
+    fi
+
+    # 10. Idempotent Custom Entrypoint Validation
+    if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
+        log "Creating entrypoint.sh..."
+        cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
+#!/bin/bash
+set -euo pipefail
+if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
+    source "/opt/hermes/.venv/bin/activate"
+fi
+echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
+exec hermes gateway run --host 0.0.0.0 --port 8642
+EOF2
+        chmod +x "${HERMES_DATA}/entrypoint.sh"
+        log "✓ Generated entrypoint.sh"
+    fi
+
+    # 11. Invoke Correctly-Scoped Functions
+    write_docker_compose "$redis_pass" "$API_KEY"
+    cleanup_stale_docker
+
+    # 12. Modular Backend Launch Context
+    log "Booting decoupled infrastructure engine stack..."
+    cd "$DOCKER_DIR"
+    
+    docker compose up -d --force-recreate redis hermes hermes-avangarde
+    log "✅ Backend core engine infrastructure live."
+}
+
+
 
 # ====================== MAIN ROUTER ======================
 
