@@ -195,41 +195,45 @@ configure_and_launch() {
     log "Repairing file permission bits..."
     find "$workspace_main" -type f ! -perm /g+w -exec chmod g+w {} + 2>/dev/null || true
 
-    # 6. HOST-SIDE DECRYPTION (Native Ajax Context)
+    # 6. ATOMIC HOST-SIDE DECRYPTION & VALIDATION (Sandbox via Temp File)
     log "Decrypting secrets natively as $USER..."
-    if ! age -d -i ~/.ssh/id_ed25519 "$SECRETS_AGE" > "$env_file" 2>/dev/null; then
+    local temp_env
+    temp_env=$(mktemp) || error "Failed to create temp file"
+    trap "rm -f '$temp_env'" RETURN
+    
+    if ! age -d -i ~/.ssh/id_ed25519 "$SECRETS_AGE" > "$temp_env" 2>/dev/null; then
         error "Failed to decrypt secrets.age"
     fi
-    chmod 600 "$env_file"
-    log "✓ Secrets decrypted and locked down"
-
-    # 7. Extract foundational backend variables safely
-    local redis_pass
-    local openrouter_model
-    redis_pass=$(grep "^REDIS_PASSWORD=" "$env_file" | cut -d'=' -f2 || true)
-    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$env_file" | cut -d'=' -f2 || echo "openrouter/free")
     
-    [[ -z "$redis_pass" ]] && error "Failed to extract REDIS_PASSWORD from hermes.env"
+    # Extract and validate critical variables safely before touching production
+    local redis_pass openrouter_model
+    redis_pass=$(grep "^REDIS_PASSWORD=" "$temp_env" | cut -d'=' -f2- | tr -d ' ')
+    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$temp_env" | cut -d'=' -f2- || echo "openrouter/free")
+    
+    [[ -z "$redis_pass" ]] && error "REDIS_PASSWORD not found in secrets"
+    
+    # Safe atomic shift to production context
+    mv "$temp_env" "$env_file"
+    chmod 600 "$env_file"
+    log "✓ Secrets decrypted and verified"
 
-    # 8. Un-Sloppy API Key Handling: Check memory state first
-    local API_KEY
-    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+    # 7. Clean, Deterministic API_KEY Assignment
+    local API_KEY="${API_SERVER_KEY:-}"
+    if [[ -z "$API_KEY" ]]; then
         API_KEY=$(openssl rand -hex 32)
-        API_SERVER_KEY="$API_KEY"
-        export API_SERVER_KEY
+        export API_SERVER_KEY="$API_KEY"
         log "✓ Generated new API_SERVER_KEY"
     else
-        API_KEY="$API_SERVER_KEY"
         log "✓ Reusing in-memory API_SERVER_KEY"
     fi
 
-    # Append key to file ONLY if it is absent to prevent infinite file growing loops
-    if ! grep -q "^API_KEY=" "$env_file" 2>/dev/null; then
+    # Append key to file ONLY if it is completely absent to stop bloat loops
+    if ! grep -q "^API_KEY=" "$env_file"; then
         echo "API_KEY=$API_KEY" >> "$env_file"
         log "✓ Appended API_SERVER_KEY to hermes.env"
     fi
 
-    # 9. Idempotent Config Generation
+    # 8. Idempotent Config Generation
     log "Validating configurations..."
     if [[ ! -f "${HERMES_DATA}/config.yaml" ]]; then
         cat > "${HERMES_DATA}/config.yaml" << EOF
@@ -240,7 +244,7 @@ EOF
         log "✓ Generated config.yaml"
     fi
 
-    # 10. Idempotent Custom Entrypoint Validation
+    # 9. Idempotent Custom Entrypoint Validation
     if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
         log "Creating entrypoint.sh..."
         cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
@@ -256,11 +260,11 @@ EOF2
         log "✓ Generated entrypoint.sh"
     fi
 
-    # 11. Invoke Correctly-Scoped Functions
+    # 10. Invoke Correctly-Scoped Functions
     write_docker_compose "$redis_pass" "$API_KEY"
     cleanup_stale_docker
 
-    # 12. Modular Backend Launch Context
+    # 11. Modular Backend Launch Context
     log "Booting decoupled infrastructure engine stack..."
     cd "$DOCKER_DIR"
     
