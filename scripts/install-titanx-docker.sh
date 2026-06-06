@@ -89,6 +89,119 @@ cleanup_stale_docker() {
     docker network rm titanx-net 2>/dev/null || true
     log "✓ Stale resources cleaned"
 }
+# ====================== HELPER FUNCTIONS (place BEFORE configure_and_launch_hermes) ======================
+
+upsert_env_entry() {
+    local key="$1"
+    local val="$2"
+    local esc_val
+    esc_val=$(printf '%s' "$val" | sed 's/[&]/\\&/g')
+   
+    if grep -q "^${key}=" "$env_file"; then
+        sed -i "s|^${key}=.*|${key}=${esc_val}|" "$env_file"
+    else
+        printf '%s=%s\n' "$key" "$val" >> "$env_file"
+    fi
+}
+
+write_docker_compose() {
+    local redis_pass="${1:?Fatal: redis_pass missing}"
+    local api_key="${2:?Fatal: api_key missing}"
+    local openrouter_model="${3:-openrouter/free}"
+
+    local RUNNER_UID=1000
+    local RUNNER_GID=1000
+
+    log "🛠️ Generating hardened docker-compose.yml with hermes + hermes-avangarde..."
+
+    cat << EOF > "${DOCKER_DIR}/docker-compose.yml"
+version: '3.9'
+
+networks:
+  titanx-net:
+    name: titanx-net
+    driver: bridge
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --requirepass "${redis_pass}" --appendonly yes
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - titanx-net
+
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: titanx-hermes
+    restart: unless-stopped
+    user: "${RUNNER_UID}:${RUNNER_GID}"
+    working_dir: /workspace
+    env_file:
+      - hermes.env
+    ports:
+      - "127.0.0.1:8642:8642"
+    depends_on:
+      - redis
+    volumes:
+      - \${HERMES_DATA}:/opt/data
+      - \${WORKSPACE_MAIN}:/workspace
+      - /home/\${USER}/.ssh:/opt/ssh:ro
+    environment:
+      - REDIS_URL=redis://:\${redis_pass}@redis:6379/0
+      - MEMORY_BACKEND=redis
+      - TERMINAL_BACKEND=docker
+      - API_SERVER_KEY=\${api_key}
+      - OPENROUTER_MODEL=${openrouter_model}
+      - WORKSPACE_DIR=/workspace
+      - HOST=0.0.0.0
+      - PORT=8642
+    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
+    networks:
+      - titanx-net
+
+  hermes-avangarde:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-avangarde
+    restart: unless-stopped
+    user: "${RUNNER_UID}:${RUNNER_GID}"
+    working_dir: /workspace
+    env_file:
+      - hermes.env
+    depends_on:
+      - redis
+      - hermes
+    volumes:
+      - \${HERMES_DATA}:/opt/data
+      - \${WORKSPACE_MAIN}/avangarde:/workspace
+      - /home/\${USER}/.ssh:/opt/ssh:ro
+    environment:
+      - REDIS_URL=redis://:\${redis_pass}@redis:6379/0
+      - MEMORY_BACKEND=redis
+      - TERMINAL_BACKEND=docker
+      - API_SERVER_KEY=\${api_key}
+      - OPENROUTER_MODEL=${openrouter_model}
+      - WORKSPACE_DIR=/workspace
+      - HOST=0.0.0.0
+      - PORT=8642
+    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
+    networks:
+      - titanx-net
+
+volumes:
+  redis_data:
+EOF
+
+    # Set secure permissions
+    chmod 644 "${DOCKER_DIR}/docker-compose.yml"
+    chown "${RUNNER_UID}:${RUNNER_GID}" "${DOCKER_DIR}/docker-compose.yml"
+
+    log "✓ docker-compose.yml written successfully (644 permissions, networks + volumes at root)"
+}
 
 write_docker_compose() {
     local redis_pass="$1"
@@ -171,105 +284,177 @@ EOF
     log "✓ File docker-compose.yml generated successfully"
 }
 
-configure_and_launch() {
-    log "Preparing Docker configuration and workspaces for MIKIE..."
+# ====================== MAIN CONFIGURATION ======================
+configure_and_launch_hermes() {
+    # ----------------------------------------------------------------------
+    # 0️⃣ Global Safety
+    # ----------------------------------------------------------------------
+    #set -euo pipefail
+    log "🔐 Starting hardened TitanX Docker deployment…"
 
-    # 1. Path Definitions
+    # ----------------------------------------------------------------------
+    # 1️⃣ Runtime Context
+    # ----------------------------------------------------------------------
+    local RUNNER_UID="${RUNNER_UID:-$(id -u $USER)}"
+    local RUNNER_GID="${RUNNER_GID:-$(id -g $USER)}"
     local workspace_main="${PROJECT_DIR}/workspace"
     local workspace_avangarde="${workspace_main}/avangarde"
     local env_file="${DOCKER_DIR}/hermes.env"
+    local git_log="${PROJECT_DIR}/git_operation.log"
+    local age_key="${AGE_ID:-/home/$USER/.ssh/id_ed25519}"
 
-    # 2. Create ALL directory structures FIRST (Natively as ajax)
-    log "Initializing directory structures..."
+    # ----------------------------------------------------------------------
+    # 2️⃣ Dependency Assertions
+    # ----------------------------------------------------------------------
+    command -v age >/dev/null || error "Missing required binary: age"
+    command -v openssl >/dev/null || error "Missing required binary: openssl"
+    command -v docker >/dev/null || error "Missing required binary: docker"
+    docker compose version >/dev/null || error "Missing required plugin: docker compose"
+    [[ -f "$age_key" ]] || error "Age identity key not found at $age_key"
+    [[ -f "$SECRETS_AGE" ]] || error "Encrypted secrets envelope not found at $SECRETS_AGE"
+
+    # ----------------------------------------------------------------------
+    # 3️⃣ Directory & Permissions
+    # ----------------------------------------------------------------------
+    log "📁 Creating required directories…"
     mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "$workspace_main" "$workspace_avangarde"
 
-    # 3. Permissions: Secure .hermes data (completely private to host ajax only)
+    log "🔒 Applying strict ownership and mode"
+    chown -R "${RUNNER_UID}:${RUNNER_GID}" "$HERMES_DATA" "$workspace_main" "$workspace_avangarde"
     chmod 700 "$HERMES_DATA"
-
-    # 4. Shared Workspace Access via SGID Group Inheritance (NO chown, NO sudo)
-    log "Enforcing SGID permission mapping..."
     chmod 2770 "$workspace_main" "$workspace_avangarde"
-    find "$workspace_main" -type d -exec chmod 2770 {} + 2>/dev/null || true
 
-    # 5. Repair any existing files inside workspace to be group-writable
-    log "Repairing file permission bits..."
-    find "$workspace_main" -type f ! -perm /g+w -exec chmod g+w {} + 2>/dev/null || true
-
-    # 6. ATOMIC HOST-SIDE DECRYPTION & VALIDATION (Sandbox via Temp File)
-    log "Decrypting secrets natively as $USER..."
-    local temp_env
-    temp_env=$(mktemp) || error "Failed to create temp file"
-    trap "rm -f '$temp_env'" RETURN
-    
-    if ! age -d -i ~/.ssh/id_ed25519 "$SECRETS_AGE" > "$temp_env" 2>/dev/null; then
-        error "Failed to decrypt secrets.age"
+    if ! find "$workspace_main" -type d -exec chmod 2770 {} + 2>/dev/null; then
+        log "⚠️ Recursive chmod on $workspace_main failed – proceeding"
     fi
-    
-    # Extract and validate critical variables safely before touching production
-    local redis_pass openrouter_model
-    redis_pass=$(grep "^REDIS_PASSWORD=" "$temp_env" | cut -d'=' -f2- | tr -d ' ')
-    openrouter_model=$(grep "^OPENROUTER_MODEL=" "$temp_env" | cut -d'=' -f2- || echo "openrouter/free")
-    
-    [[ -z "$redis_pass" ]] && error "REDIS_PASSWORD not found in secrets"
-    
-    # Safe atomic shift to production context
-    mv "$temp_env" "$env_file"
-    chmod 600 "$env_file"
-    log "✓ Secrets decrypted and verified"
 
-    # 7. Clean, Deterministic API_KEY Assignment
-    local API_KEY="${API_SERVER_KEY:-}"
+    # ----------------------------------------------------------------------
+    # 4️⃣ Git Sync (Atomic)
+    # ----------------------------------------------------------------------
+    if [[ -d "${PROJECT_DIR}/.git" ]]; then
+        log "🔄 Synchronizing repository state…"
+        pushd "$PROJECT_DIR" >/dev/null
+        local default_branch
+        default_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $NF}') || default_branch="main"
+        git fetch origin "$default_branch" >>"$git_log" 2>&1 || log "⚠️ git fetch failed – using local state"
+        git reset --hard "origin/${default_branch}" >>"$git_log" 2>&1 || log "⚠️ git reset failed – assuming dirty working tree"
+        popd >/dev/null
+    fi
+
+    # ----------------------------------------------------------------------
+    # 5️⃣ Pull Existing API Key
+    # ----------------------------------------------------------------------
+    local current_api_key=""
+    if [[ -f "$env_file" ]]; then
+        current_api_key=$(grep '^API_KEY=' "$env_file" | head -n1 | cut -d= -f2- | tr -d '"') || current_api_key=""
+    fi
+
+    # ----------------------------------------------------------------------
+    # 6️⃣ Decrypt Secrets (Safe In-Memory)
+    # ----------------------------------------------------------------------
+    local temp_env
+    temp_env=$(mktemp -p "$DOCKER_DIR" env.XXXXXX) || error "Failed to create temporary file"
+    trap 'rm -f "$temp_env"' EXIT
+
+    log "🔓 Decrypting secrets…"
+    if ! age -d -i "$age_key" "$SECRETS_AGE" >"$temp_env" 2>/dev/null; then
+        error "Decryption of $SECRETS_AGE failed"
+    fi
+
+    local redis_pass="" openrouter_model=""
+    while IFS='=' read -r key val || [[ -n $key ]]; do
+        key=$(printf '%s' "$key" | tr -d '[:space:]')
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        val=$(printf '%s' "$val" | sed -e 's/^"//' -e 's/"$//')
+        case "$key" in
+            REDIS_PASSWORD) redis_pass="$val" ;;
+            OPENROUTER_MODEL) openrouter_model="$val" ;;
+        esac
+    done <"$temp_env"
+
+    [[ -n "$redis_pass" ]] || error "Decrypted REDIS_PASSWORD is empty"
+
+    if [[ -z "$openrouter_model" ]]; then
+        openrouter_model="google/gemini-2.5-flash:free"
+        log "⚠️ OPENROUTER_MODEL missing – using default openrouter free tier target"
+    fi
+
+    rm -f "$temp_env"
+    trap - EXIT
+
+    # ----------------------------------------------------------------------
+    # 7️⃣ API_KEY — Strict Evaluation
+    # ----------------------------------------------------------------------
+    local API_KEY="${API_SERVER_KEY:-$current_api_key}"
     if [[ -z "$API_KEY" ]]; then
+        log "Neither memory execution contexts nor configuration files contain active tokens. Generating fresh context..."
         API_KEY=$(openssl rand -hex 32)
         export API_SERVER_KEY="$API_KEY"
-        log "✓ Generated new API_SERVER_KEY"
+        log "✓ Generated new dynamic API_KEY asset context"
     else
-        log "✓ Reusing in-memory API_SERVER_KEY"
+        log "✓ Reusing active API_KEY context securely via prioritized priority chain"
+        if [[ "$API_KEY" == "$current_api_key" ]]; then
+            export API_SERVER_KEY="$API_KEY"
+        fi
     fi
 
-    # Append key to file ONLY if it is completely absent to stop bloat loops
-    if ! grep -q "^API_KEY=" "$env_file"; then
-        echo "API_KEY=$API_KEY" >> "$env_file"
-        log "✓ Appended API_SERVER_KEY to hermes.env"
-    fi
+    # ----------------------------------------------------------------------
+    # 8️⃣ hermes.env Upsert
+    # ----------------------------------------------------------------------
+    [[ -f "$env_file" ]] || touch "$env_file"
+    chmod 600 "$env_file"
 
-    # 8. Idempotent Config Generation
-    log "Validating configurations..."
-    if [[ ! -f "${HERMES_DATA}/config.yaml" ]]; then
-        cat > "${HERMES_DATA}/config.yaml" << EOF
-model: ${openrouter_model}
-provider: openrouter
-EOF
-        chmod 644 "${HERMES_DATA}/config.yaml"
-        log "✓ Generated config.yaml"
-    fi
+    log "📝 Updating entries within hermes.env..."
+    upsert_env_entry "REDIS_PASSWORD" "$redis_pass"
+    upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model"
+    upsert_env_entry "API_KEY" "$API_KEY"
+    chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
 
-    # 9. Idempotent Custom Entrypoint Validation
-    if [[ ! -f "${HERMES_DATA}/entrypoint.sh" ]]; then
-        log "Creating entrypoint.sh..."
-        cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF2'
+    # ----------------------------------------------------------------------
+    # 9️⃣ Render Compose + Entrypoint + Launch (3 parameters now)
+    # ----------------------------------------------------------------------
+    write_docker_compose "$redis_pass" "$openrouter_model" "$API_KEY"
+
+    cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF'
 #!/bin/bash
-set -euo pipefail
-if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
-    source "/opt/hermes/.venv/bin/activate"
+set -e
+if [[ -f /opt/data/secrets.age ]]; then
+    echo "Loading secrets into RAM..."
+    eval "$(age -d -i /opt/ssh/id_ed25519 /opt/data/secrets.age | sed 's/^/export /')"
 fi
-echo "[ENTRYPOINT] Launching Hermes Gateway on 0.0.0.0:8642..."
-exec hermes gateway run --host 0.0.0.0 --port 8642
-EOF2
-        chmod +x "${HERMES_DATA}/entrypoint.sh"
-        log "✓ Generated entrypoint.sh"
-    fi
+exec /usr/local/bin/hermes gateway run --host 0.0.0.0 --port 8642
+EOF
 
-    # 10. Invoke Correctly-Scoped Functions
-    write_docker_compose "$redis_pass" "$API_KEY"
+    chmod +x "${HERMES_DATA}/entrypoint.sh"
+    chown "${RUNNER_UID}:${RUNNER_GID}" "${HERMES_DATA}/entrypoint.sh"
+
+    log "🧹 Removing stale infrastructure containers..."
+   
+    cd "$DOCKER_DIR" || error "Cannot cd to $DOCKER_DIR"
+
+    # Safe cleanup - only targets containers defined in current compose file
+    docker compose -f docker-compose.yml down --remove-orphans --volumes 2>/dev/null || true
+
+    # Optional: Extra safety (remove any old hermes containers by name)
     cleanup_stale_docker
 
-    # 11. Modular Backend Launch Context
-    log "Booting decoupled infrastructure engine stack..."
-    cd "$DOCKER_DIR"
-    
-    docker compose up -d --force-recreate redis hermes hermes-avangarde
-    log "✅ Backend core engine infrastructure live."
+    log "✓ Stale containers cleaned"
+
+    log "🚀 Launching TitanX stack via isolated manifest rules"
+    pushd "$DOCKER_DIR" >/dev/null
+    local attempts=0 max_attempts=5
+
+    until docker compose -f docker-compose.yml up -d --force-recreate redis hermes hermes-avangarde; do
+        ((attempts++))
+        if (( attempts >= max_attempts )); then
+            error "Fatal: Infrastructure orchestration failed to deploy background services after $attempts loops."
+        fi
+        log "⏳ Rescheduling execution deployment sequence in 3s ($attempts/$max_attempts)..."
+        sleep 3
+    done
+    popd >/dev/null
+
+    log "✅ Deployment complete – all prioritized services are up"
 }
 
 
