@@ -203,89 +203,9 @@ EOF
     log "✓ docker-compose.yml written successfully (644 permissions, networks + volumes at root)"
 }
 
-write_docker_compose() {
-    local redis_pass="$1"
-    local api_key="$2"
-
-    log "Generating modular docker-compose.yml..."
-    cat > "$DOCKER_DIR/docker-compose.yml" << EOF
-services:
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --requirepass ${redis_pass} --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - titanx-net
-
-  hermes:
-    image: nousresearch/hermes-agent:latest
-    container_name: titanx-hermes
-    restart: unless-stopped
-    user: "1000:1000"
-    env_file:
-      - hermes.env
-    volumes:
-      - ${HERMES_DATA}:/opt/data
-      - ${PROJECT_DIR}/workspace:/workspace
-      - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
-    environment:
-      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
-      - MEMORY_BACKEND=redis
-      - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=${api_key}
-      - WORKSPACE_DIR=/workspace
-      - HOST=0.0.0.0          
-      - PORT=8642
-    ports:
-      - "127.0.0.1:8642:8642"
-    depends_on:
-      - redis
-    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
-    networks:
-      - titanx-net
-
-  hermes-avangarde:
-    image: nousresearch/hermes-agent:latest
-    container_name: hermes-avangarde
-    restart: unless-stopped
-    user: "1000:1000"
-    env_file:
-      - hermes.env
-    volumes:
-      - ${HERMES_DATA}:/opt/data
-      - ${PROJECT_DIR}/workspace/avangarde:/workspace
-      - /home/${USER}/.ssh/id_ed25519:/opt/ssh/id_ed25519:ro
-    environment:
-      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
-      - MEMORY_BACKEND=redis
-      - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=${api_key}
-      - WORKSPACE_DIR=/workspace
-      - HOST=0.0.0.0          
-      - PORT=8642
-    ports:
-      - "127.0.0.1:8643:8642"
-    depends_on:
-      - redis
-    entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
-    networks:
-      - titanx-net
-
-volumes:
-  redis_data:
-
-networks:
-  titanx-net:
-    driver: bridge
-EOF
-    chmod 644 "$DOCKER_DIR/docker-compose.yml"
-    log "✓ File docker-compose.yml generated successfully"
-}
 
 # ====================== MAIN CONFIGURATION ======================
-configure_and_launch_hermes() {
+configure_and_launch() {
     # ----------------------------------------------------------------------
     # 0️⃣ Global Safety
     # ----------------------------------------------------------------------
