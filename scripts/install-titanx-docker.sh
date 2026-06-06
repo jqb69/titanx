@@ -105,16 +105,20 @@ upsert_env_entry() {
 }
 
 write_docker_compose() {
-    local redis_pass="${1:?Fatal: redis_pass missing}"
-    local api_key="${2:?Fatal: api_key missing}"
+    local redis_pass="${1:?redis_pass missing}"
+    local api_key="${2:?api_key missing}"
     local openrouter_model="${3:-openrouter/free}"
 
     local RUNNER_UID=1000
     local RUNNER_GID=1000
 
-    log "🛠️ Generating hardened docker-compose.yml with hermes + hermes-avangarde..."
+    log "🛠️ Writing docker-compose.yml with proper variable substitution..."
 
-    cat << EOF > "${DOCKER_DIR}/docker-compose.yml"
+    # Make sure key variables are available for expansion
+    #local HERMES_DATA="${HERMES_DATA:-/home/ajax/titanx/.hermes}"
+    local WORKSPACE_MAIN="${WORKSPACE_MAIN:-/home/ajax/titanx/workspace}"
+
+    cat > "${DOCKER_DIR}/docker-compose.yml" << EOF
 version: '3.9'
 
 networks:
@@ -148,14 +152,14 @@ services:
     depends_on:
       - redis
     volumes:
-      - \${HERMES_DATA}:/opt/data
-      - \${WORKSPACE_MAIN}:/workspace
-      - /home/\${USER}/.ssh:/opt/ssh:ro
+      - ${HERMES_DATA}:/opt/data
+      - ${WORKSPACE_MAIN}:/workspace
+      - /home/${USER}/.ssh:/opt/ssh:ro
     environment:
-      - REDIS_URL=redis://:\${redis_pass}@redis:6379/0
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=\${api_key}
+      - API_SERVER_KEY=${api_key}
       - OPENROUTER_MODEL=${openrouter_model}
       - WORKSPACE_DIR=/workspace
       - HOST=0.0.0.0
@@ -176,14 +180,14 @@ services:
       - redis
       - hermes
     volumes:
-      - \${HERMES_DATA}:/opt/data
-      - \${WORKSPACE_MAIN}/avangarde:/workspace
-      - /home/\${USER}/.ssh:/opt/ssh:ro
+      - ${HERMES_DATA}:/opt/data
+      - ${WORKSPACE_MAIN}/avangarde:/workspace
+      - /home/${USER}/.ssh:/opt/ssh:ro
     environment:
-      - REDIS_URL=redis://:\${redis_pass}@redis:6379/0
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - MEMORY_BACKEND=redis
       - TERMINAL_BACKEND=docker
-      - API_SERVER_KEY=\${api_key}
+      - API_SERVER_KEY=${api_key}
       - OPENROUTER_MODEL=${openrouter_model}
       - WORKSPACE_DIR=/workspace
       - HOST=0.0.0.0
@@ -196,11 +200,10 @@ volumes:
   redis_data:
 EOF
 
-    # Set secure permissions
     chmod 644 "${DOCKER_DIR}/docker-compose.yml"
     chown "${RUNNER_UID}:${RUNNER_GID}" "${DOCKER_DIR}/docker-compose.yml"
 
-    log "✓ docker-compose.yml written successfully (644 permissions, networks + volumes at root)"
+    log "✓ docker-compose.yml written successfully"
 }
 
 
