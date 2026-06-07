@@ -174,6 +174,8 @@ services:
     restart: unless-stopped
     user: "${RUNNER_UID}:${RUNNER_GID}"
     working_dir: /workspace
+    ports:
+      - "127.0.0.1:8643:8642"
     env_file:
       - hermes.env
     depends_on:
@@ -318,6 +320,7 @@ configure_and_launch() {
         log "✓ Reusing active API_KEY context securely via prioritized priority chain"
         if [[ "$API_KEY" == "$current_api_key" ]]; then
             export API_SERVER_KEY="$API_KEY"
+            log "✓ Reusing active API_KEY in env file"
         fi
     fi
 
@@ -338,6 +341,7 @@ configure_and_launch() {
     # ----------------------------------------------------------------------
     write_docker_compose "$redis_pass" "$openrouter_model" "$API_KEY"
 
+    if [ ! -f "${HERMES_DATA}/entrypoint.sh" ]; then
     cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF'
 #!/bin/bash
 set -e
@@ -347,7 +351,8 @@ if [[ -f /opt/data/secrets.age ]]; then
 fi
 exec /usr/local/bin/hermes gateway run --host 0.0.0.0 --port 8642
 EOF
-
+    fi
+    
     chmod +x "${HERMES_DATA}/entrypoint.sh"
     chown "${RUNNER_UID}:${RUNNER_GID}" "${HERMES_DATA}/entrypoint.sh"
 
