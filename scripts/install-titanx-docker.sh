@@ -94,14 +94,26 @@ cleanup_stale_docker() {
 upsert_env_entry() {
     local key="$1"
     local val="$2"
-    local esc_val
-    esc_val=$(printf '%s' "$val" | sed 's/[&]/\\&/g')
-   
-    if grep -q "^${key}=" "$env_file"; then
-        sed -i "s|^${key}=.*|${key}=${esc_val}|" "$env_file"
-    else
-        printf '%s=%s\n' "$key" "$val" >> "$env_file"
-    fi
+    local env_file="$3"
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    # If the environment file doesn't exist, create it empty
+    touch "$env_file"
+
+    # Stream lines out cleanly, filtering out the targeted key
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" != "${key}"=* ]]; then
+            echo "$line" >> "$tmp_file"
+        fi
+    done < "$env_file"
+
+    # Append the clean new key=value mapping directly
+    echo "${key}=${val}" >> "$tmp_file"
+
+    # Atomically move the clean state into place
+    mv "$tmp_file" "$env_file"
+    chmod 600 "$env_file"
 }
 
 write_docker_compose() {
@@ -300,7 +312,7 @@ configure_and_launch() {
     [[ -n "$redis_pass" ]] || error "Decrypted REDIS_PASSWORD is empty"
 
     if [[ -z "$openrouter_model" ]]; then
-        openrouter_model="google/gemini-2.5-flash:free"
+        openrouter_model="openrouter/free"
         log "⚠️ OPENROUTER_MODEL missing – using default openrouter free tier target"
     fi
 
@@ -331,9 +343,9 @@ configure_and_launch() {
     chmod 600 "$env_file"
 
     log "📝 Updating entries within hermes.env..."
-    upsert_env_entry "REDIS_PASSWORD" "$redis_pass"
-    upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model"
-    upsert_env_entry "API_KEY" "$API_KEY"
+    upsert_env_entry "REDIS_PASSWORD" "$redis_pass" "$env_file"
+    upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model" "$env_file"
+    upsert_env_entry "API_KEY" "$API_KEY" "$env_file"
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
 
     # ----------------------------------------------------------------------
