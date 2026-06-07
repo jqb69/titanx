@@ -351,15 +351,15 @@ configure_and_launch() {
     # ----------------------------------------------------------------------
     # 9️⃣ Render Compose + Entrypoint + Launch (3 parameters now)
     # ----------------------------------------------------------------------
-    write_docker_compose "$redis_pass" "$openrouter_model" "$API_KEY"
+    write_docker_compose "$redis_pass" "$API_KEY" "$openrouter_model"
 
     if [ ! -f "${HERMES_DATA}/entrypoint.sh" ]; then
     cat > "${HERMES_DATA}/entrypoint.sh" << 'EOF'
 #!/bin/bash
 set -e
-if [[ -f /opt/data/secrets.age ]]; then
-    echo "Loading secrets into RAM..."
-    eval "$(age -d -i /opt/ssh/id_ed25519 /opt/data/secrets.age | sed 's/^/export /')"
+if [[ -f "/opt/hermes/.venv/bin/activate" ]]; then
+    echo "[ENTRYPOINT] Activating image virtual environment..."
+    source "/opt/hermes/.venv/bin/activate"
 fi
 exec /usr/local/bin/hermes gateway run --host 0.0.0.0 --port 8642
 EOF
