@@ -119,7 +119,7 @@ write_docker_compose() {
     local WORKSPACE_MAIN="${WORKSPACE_MAIN:-/home/ajax/titanx/workspace}"
 
     cat > "${DOCKER_DIR}/docker-compose.yml" << EOF
-version: '3.9'
+
 
 networks:
   titanx-net:
