@@ -355,6 +355,7 @@ configure_and_launch() {
     fi
     if [[ -n "$github_token" ]]; then
         upsert_env_entry "GITHUB_TOKEN" "$github_token" "$env_file"
+        log "✓ GITHUB_TOKEN in $env_file updated!"
     fi
     upsert_env_entry "REDIS_PASSWORD" "$redis_pass" "$env_file"
     upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model" "$env_file"
