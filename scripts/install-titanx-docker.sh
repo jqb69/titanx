@@ -299,6 +299,7 @@ configure_and_launch() {
     fi
 
     local redis_pass="" openrouter_model=""
+    local openrouter_api_key="" git_user="" github_token=""
     while IFS='=' read -r key val || [[ -n $key ]]; do
         key=$(printf '%s' "$key" | tr -d '[:space:]')
         [[ -z "$key" || "$key" == \#* ]] && continue
@@ -306,6 +307,9 @@ configure_and_launch() {
         case "$key" in
             REDIS_PASSWORD) redis_pass="$val" ;;
             OPENROUTER_MODEL) openrouter_model="$val" ;;
+            OPENROUTER_API_KEY) openrouter_api_key="$val" ;;
+            GIT_USER) git_user="$val" ;;
+            GITHUB_TOKEN) github_token="$val" ;;
         esac
     done <"$temp_env"
 
@@ -343,6 +347,15 @@ configure_and_launch() {
     chmod 600 "$env_file"
 
     log "📝 Updating entries within hermes.env..."
+    if [[ -n "$openrouter_api_key" ]]; then
+        upsert_env_entry "OPENROUTER_API_KEY" "$openrouter_api_key" "$env_file"
+    fi
+    if [[ -n "$git_user" ]]; then
+        upsert_env_entry "GIT_USER" "$git_user" "$env_file"
+    fi
+    if [[ -n "$github_token" ]]; then
+        upsert_env_entry "GITHUB_TOKEN" "$github_token" "$env_file"
+    fi
     upsert_env_entry "REDIS_PASSWORD" "$redis_pass" "$env_file"
     upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model" "$env_file"
     upsert_env_entry "API_KEY" "$API_KEY" "$env_file"
