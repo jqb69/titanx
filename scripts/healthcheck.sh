@@ -19,34 +19,20 @@ check_docker_services() {
 }
 
 check_streamlit() {
-  log "Waiting for Streamlit via Caddy (max 105s)..."
-  local timeout=105
-  local interval=3
-  local warn_every=15
+  log "Waiting for Streamlit via Caddy (max 60s)..."
+  local timeout=60
+  local interval=2
 
   for ((t=0; t<timeout; t+=interval)); do
-    if python3 - <<'PYEOF' 2>/dev/null
-import urllib.request, ssl
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-try:
-    urllib.request.urlopen("https://localhost/_stcore/health", timeout=5, context=ctx)
-    exit(0)
-except:
-    try:
-        urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
-        exit(0)
-    except:
-        exit(1)
-PYEOF
-    then
+    # Try HTTPS first (what users see), then fallback to HTTP
+    if python3 -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://caddy/_stcore/health', timeout=3, context=ctx)" 2>/dev/null || \
+       python3 -c "import urllib.request; urllib.request.urlopen('http://caddy/_stcore/health', timeout=3)" 2>/dev/null; then
       log "✅ Streamlit is reachable via Caddy"
       return 0
     fi
 
     sleep "$interval"
-    if (( t % warn_every == 0 && t != 0 )); then
+    if (( t % 20 == 0 && t != 0 )); then
       log "Still waiting... (${t}/${timeout}s)"
     fi
   done
