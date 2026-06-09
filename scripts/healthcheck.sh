@@ -26,25 +26,19 @@ check_streamlit() {
 
   for ((t=0; t<timeout; t+=interval)); do
     if python3 - <<'PYEOF' 2>/dev/null
-import urllib.request, ssl, sys
+import urllib.request, ssl
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 try:
     urllib.request.urlopen("https://localhost/_stcore/health", timeout=5, context=ctx)
-    sys.exit(0)
+    exit(0)
 except:
     try:
         urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
-        sys.exit(0)
+        exit(0)
     except:
-        urllib.request.urlopen("https://localhost/_stcore/health", timeout=5, context=ctx)
-        sys.exit(0)
-        try:
-            urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
-            sys.exit(0)
-        except:
-            sys.exit(1)
+        exit(1)
 PYEOF
     then
       log "✅ Streamlit is reachable via Caddy"
@@ -58,7 +52,6 @@ PYEOF
   done
 
   log "⚠️ Streamlit took longer than expected"
-  #return 1
 }
 
 
