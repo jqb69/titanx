@@ -34,7 +34,7 @@ COPY . .
 EXPOSE 8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD sh -c "python - <<'PYEOF'
+  CMD sh -c "python - <<'PYEOF'\
 import urllib.request, ssl
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
