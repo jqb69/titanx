@@ -34,22 +34,26 @@ COPY . .
 EXPOSE 8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python - <<'PYEOF'
+  CMD sh -c "python - <<'PYEOF'
 import urllib.request, ssl
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 try:
-    urllib.request.urlopen("https://caddy/_stcore/health", timeout=5, context=ctx)
+    urllib.request.urlopen('https://caddy/_stcore/health', timeout=5, context=ctx)
     exit(0)
 except:
     try:
-        urllib.request.urlopen("http://caddy/_stcore/health", timeout=5)
+        urllib.request.urlopen('http://caddy/_stcore/health', timeout=5)
         exit(0)
     except:
+        urllib.request.urlopen('https://caddy/_stcore/health', timeout=5, context=ctx)
         exit(1)
 PYEOF
+"
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
 EOF
+
 }
 
 add_caddy_override() {
