@@ -26,12 +26,12 @@ generate_file() {
 OPENROUTER_API_KEY=$OPENROUTER_KEY
 OPENROUTER_MODEL=$OPENROUTER_MODEL
 GIT_USER=$G_USER
-GITHUB_TOKEN=$G_TOKEN
+GIT_TOKEN=$G_TOKEN
 PROJECT_PRIVATE_KEY=$P_PRIVATE_KEY
 EOF
 
     # 3. Integrity check
-    for var in "OPENROUTER_API_KEY" "OPENROUTER_MODEL" "GIT_USER" "GITHUB_TOKEN" "PROJECT_PRIVATE_KEY"; do
+    for var in "OPENROUTER_API_KEY" "OPENROUTER_MODEL" "GIT_USER" "GIT_TOKEN" "PROJECT_PRIVATE_KEY"; do
         if ! grep -q "^${var}=" "$SECRETS_TXT"; then
             error "Failed to write $var to secrets.txt!"
         fi
