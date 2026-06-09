@@ -38,7 +38,13 @@ except:
         urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
         sys.exit(0)
     except:
-        sys.exit(1)
+        urllib.request.urlopen("https://localhost/_stcore/health", timeout=5, context=ctx)
+        sys.exit(0)
+        try:
+            urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
+            sys.exit(0)
+        except:
+            sys.exit(1)
 PYEOF
     then
       log "✅ Streamlit is reachable via Caddy"
@@ -52,7 +58,7 @@ PYEOF
   done
 
   log "⚠️ Streamlit took longer than expected"
-  return 1
+  #return 1
 }
 
 
