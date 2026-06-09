@@ -19,27 +19,43 @@ check_docker_services() {
 }
 
 check_streamlit() {
-    log "Waiting for Streamlit via Caddy (max 90s)..."
-    local timeout=90
-    for ((i=0; i<timeout; i+=3)); do
-        if python3 -c '
-import urllib.request
+  log "Waiting for Streamlit via Caddy (max 105s)..."
+  local timeout=105
+  local interval=3
+  local warn_every=15
+
+  for ((t=0; t<timeout; t+=interval)); do
+    if python3 - <<'PYEOF' 2>/dev/null
+import urllib.request, ssl, sys
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
 try:
-    urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
-    exit(0)
+    urllib.request.urlopen("https://localhost/_stcore/health", timeout=5, context=ctx)
+    sys.exit(0)
 except:
-    exit(1)
-' 2>/dev/null; then
-            log "✅ Streamlit is reachable via Caddy"
-            return 0
-        fi
-        sleep 3
-        if ((i >= 45)); then
-            log "Still waiting... ($i/$timeout s)"
-        fi
-    done
-    log "⚠️ Streamlit took longer than expected"
+    try:
+        urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
+        sys.exit(0)
+    except:
+        sys.exit(1)
+PYEOF
+    then
+      log "✅ Streamlit is reachable via Caddy"
+      return 0
+    fi
+
+    sleep "$interval"
+    if (( t % warn_every == 0 && t != 0 )); then
+      log "Still waiting... (${t}/${timeout}s)"
+    fi
+  done
+
+  log "⚠️ Streamlit took longer than expected"
+  return 1
 }
+
+
 
 print_final_summary() {
     echo "========================================"
