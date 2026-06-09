@@ -309,7 +309,7 @@ configure_and_launch() {
             OPENROUTER_MODEL) openrouter_model="$val" ;;
             OPENROUTER_API_KEY) openrouter_api_key="$val" ;;
             GIT_USER) git_user="$val" ;;
-            GITHUB_TOKEN) github_token="$val" ;;
+            GIT_TOKEN) github_token="$val" ;;
         esac
     done <"$temp_env"
 
@@ -354,8 +354,8 @@ configure_and_launch() {
         upsert_env_entry "GIT_USER" "$git_user" "$env_file"
     fi
     if [[ -n "$github_token" ]]; then
-        upsert_env_entry "GITHUB_TOKEN" "$github_token" "$env_file"
-        log "✓ GITHUB_TOKEN in $env_file updated!"
+        upsert_env_entry "GIT_TOKEN" "$github_token" "$env_file"
+        log "✓ GIT_TOKEN in $env_file updated!"
     fi
     upsert_env_entry "REDIS_PASSWORD" "$redis_pass" "$env_file"
     upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model" "$env_file"
