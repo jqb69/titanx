@@ -48,7 +48,11 @@ except:
         exit(0)
     except:
         urllib.request.urlopen('https://caddy/_stcore/health', timeout=5, context=ctx)
-        exit(1)
+        try:
+            urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
+            exit(0)
+        except:
+            exit(1)
 PYEOF
 "
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
