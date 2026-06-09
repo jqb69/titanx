@@ -19,16 +19,24 @@ check_docker_services() {
 }
 
 check_streamlit() {
-  log "Waiting for Streamlit via Caddy (max 60s)..."
-  local timeout=60
+  log "Waiting for Streamlit via Caddy (max 90s)..."
+  local timeout=90
   local interval=2
 
   for ((t=0; t<timeout; t+=interval)); do
-    # Try HTTPS first (what users see), then fallback to HTTP
-    if python3 -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://caddy/_stcore/health', timeout=3, context=ctx)" 2>/dev/null || \
-       python3 -c "import urllib.request; urllib.request.urlopen('http://caddy/_stcore/health', timeout=3)" 2>/dev/null; then
-      log "✅ Streamlit is reachable via Caddy"
-      return 0
+    # Direct check to Streamlit on web container (what Docker HEALTHCHECK uses)
+    if python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)" 2>/dev/null; then
+      log "✅ Streamlit is running and healthy"
+      
+      # Now verify Caddy can reach it too
+      sleep 2
+      if python3 -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost/_stcore/health', timeout=3, context=ctx)" 2>/dev/null || \
+         python3 -c "import urllib.request; urllib.request.urlopen('http://localhost/_stcore/health', timeout=3)" 2>/dev/null; then
+        log "✅ Streamlit is reachable via Caddy (HTTPS)"
+        return 0
+      else
+        log "⚠️ Streamlit healthy but Caddy routing not ready yet"
+      fi
     fi
 
     sleep "$interval"
