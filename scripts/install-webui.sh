@@ -25,7 +25,7 @@ streamlit
 requests
 EOF
 
-    cat > "$WEB_DIR/Dockerfile" << 'EOF'
+    cat > "$WEB_DIR/Dockerfile" <<'DOCKERFILE'
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
@@ -34,28 +34,9 @@ COPY . .
 EXPOSE 8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD sh -c 'python - <<'"'"'PYEOF'"'"'
-import urllib.request, ssl
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-try:
-    urllib.request.urlopen("https://caddy/_stcore/health", timeout=5, context=ctx)
-    exit(0)
-except:
-    try:
-        urllib.request.urlopen("http://caddy/_stcore/health", timeout=5)
-        exit(0)
-    except:
-        try:
-            urllib.request.urlopen("http://localhost/_stcore/health", timeout=5)
-            exit(0)
-        except:
-            exit(1)
-PYEOF
-'
+  CMD python -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; (lambda: urllib.request.urlopen('https://caddy/_stcore/health', timeout=5, context=ctx))() if True else None" 2>/dev/null || python -c "import urllib.request; urllib.request.urlopen('http://caddy/_stcore/health', timeout=5)" 2>/dev/null || exit 1
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
-EOF
+DOCKERFILE
 
 }
 
@@ -90,7 +71,7 @@ services:
       - HERMES_URL=http://titanx-hermes:8642
       - HERMES_API_KEY=${api_key}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
