@@ -34,7 +34,7 @@ COPY . .
 EXPOSE 8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; (lambda: urllib.request.urlopen('https://caddy/_stcore/health', timeout=5, context=ctx))() if True else None" 2>/dev/null || python -c "import urllib.request; urllib.request.urlopen('http://caddy/_stcore/health', timeout=5)" 2>/dev/null || exit 1
+  CMD python -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; (lambda: urllib.request.urlopen('https://caddy/_stcore/health', timeout=5))() or exit(0)" 2>/dev/null || exit 1
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
 DOCKERFILE
 
@@ -101,7 +101,7 @@ EOF
 
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
 {
-    auto_https disable_redirects
+    auto_https off
 }
 
 :80 {
@@ -109,12 +109,11 @@ EOF
 }
 
 :443 {
-    tls internal
     reverse_proxy web:8501
 }
 EOF
 
-    log "✅ Override created with synced HERMES_API_KEY"
+    log "✅ Override created with synced HERMES_API_KEY and HTTP-only config"
 }
 
 build_and_start() {
