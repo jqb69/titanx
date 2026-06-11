@@ -102,6 +102,7 @@ EOF
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
 {
     auto_https off
+    admin off
 }
 
 :80 {
@@ -109,11 +110,14 @@ EOF
 }
 
 :443 {
+    tls internal {
+        on_demand
+    }
     reverse_proxy web:8501
 }
 EOF
 
-    log "✅ Override created with synced HERMES_API_KEY and HTTP-only config"
+    log "✅ Override created with synced HERMES_API_KEY and on-demand HTTPS"
 }
 
 build_and_start() {
