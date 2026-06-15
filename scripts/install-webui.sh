@@ -41,22 +41,24 @@ DOCKERFILE
 
 }
 
+
 add_caddy_override() {
     log "Creating docker-compose.override.yml with web + worker + Caddy..."
 
-    # Extract secrets
     local api_key=""
     local redis_pass=""
 
     if [[ -f "$DOCKER_DIR/hermes.env" ]]; then
-        api_key=$(grep "^HERMES_API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
+        api_key=$(grep "^API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
         redis_pass=$(grep "^REDIS_PASSWORD=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
     fi
 
     if [[ -z "$api_key" ]]; then
         api_key=$(openssl rand -hex 32)
-        echo "HERMES_API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
-        log "✓ Generated new HERMES_API_KEY"
+        echo "API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
+        log "✓ Generated new API_KEY"
+    else
+        log "✓ Loaded API_KEY from hermes.env"
     fi
 
     if [[ -z "$redis_pass" ]]; then
@@ -77,7 +79,7 @@ services:
       - hermes
     environment:
       - HERMES_URL=http://titanx-hermes:8642
-      - HERMES_API_KEY=${api_key}
+      - HERMES_API_KEY=${api_key}     # Still pass as HERMES_API_KEY to client.py
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
@@ -126,7 +128,6 @@ volumes:
   caddy_config:
 EOF
 
-    # Caddyfile
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
 {
     auto_https off
@@ -145,7 +146,7 @@ EOF
 }
 EOF
 
-    log "✅ docker-compose.override.yml created with worker scaling support"
+    log "✅ Override created using API_KEY from hermes.env"
 }
 
 build_and_start() {
