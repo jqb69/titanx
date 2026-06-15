@@ -23,9 +23,10 @@ create_requirements_and_dockerfile() {
     cat > "$WEB_DIR/requirements.txt" << 'EOF'
 streamlit
 requests
+redis
 EOF
 
-    cat > "$WEB_DIR/Dockerfile" <<'DOCKERFILE'
+    cat > "$WEB_DIR/Dockerfile" << 'DOCKERFILE'
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
@@ -34,27 +35,36 @@ COPY . .
 EXPOSE 8501
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; (lambda: urllib.request.urlopen('https://caddy/_stcore/health', timeout=5))() or exit(0)" 2>/dev/null || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)" || exit 1
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
 DOCKERFILE
 
 }
 
 add_caddy_override() {
-    log "Creating docker-compose.override.yml (API_KEY sync + clean merge)..."
+    log "Creating docker-compose.override.yml with web + worker + Caddy..."
 
-    # Read the actual key name used in hermes.env
+    # Extract secrets from hermes.env
     local api_key=""
+    local redis_pass=""
+
     if [[ -f "$DOCKER_DIR/hermes.env" ]]; then
         api_key=$(grep "^API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
+        redis_pass=$(grep "^REDIS_PASSWORD=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
     fi
 
     if [[ -z "$api_key" ]]; then
         api_key=$(openssl rand -hex 32)
         echo "API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
-        log "✓ Generated new API_KEY and appended to hermes.env"
+        log "✓ Generated new API_KEY"
     else
         log "✓ Loaded existing API_KEY from hermes.env"
+    fi
+
+    if [[ -z "$redis_pass" ]]; then
+        error "REDIS_PASSWORD not found in hermes.env - run install-titanx-docker.sh first"
+    else
+        log "✓ Loaded REDIS_PASSWORD"
     fi
 
     cat > "$DOCKER_DIR/docker-compose.override.yml" << EOF
@@ -70,12 +80,28 @@ services:
     environment:
       - HERMES_URL=http://titanx-hermes:8642
       - HERMES_API_KEY=${api_key}
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 90s
+
+  worker:
+    image: titanx-web:latest
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "-u", "worker.py"]
+    depends_on:
+      - redis
+      - hermes
+    environment:
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
+      - HERMES_URL=http://titanx-hermes:8642
+      - HERMES_API_KEY=${api_key}
+    networks:
+      - titanx-net
 
   caddy:
     image: caddy:2-alpine
@@ -117,18 +143,24 @@ EOF
 }
 EOF
 
-    log "✅ Override created with synced HERMES_API_KEY and on-demand HTTPS"
+    log "✅ docker-compose.override.yml created with worker + Caddy"
 }
 
 build_and_start() {
-    log "Building and starting Web UI + Caddy..."
-    cd "$DOCKER_DIR"
-    docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build web caddy
-    log "✅ Web UI + Caddy started"
+    log "Building titanx-web image and starting stack..."
+
+    cd "${WEB_DIR}" || error "web directory not found"
+    docker build -t titanx-web:latest . || error "Build failed"
+    log "✓ titanx-web image built successfully"
+
+    cd "$DOCKER_DIR" || error "docker directory not found"
+    docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build --scale worker=3
+    
+    log "✅ Stack started with 3 worker replicas"
 }
 
 main() {
-    log "=== Installing Web UI with Caddy ==="
+    log "=== Installing Web UI with Worker + Caddy ==="
 
     check_web_source
     create_requirements_and_dockerfile
