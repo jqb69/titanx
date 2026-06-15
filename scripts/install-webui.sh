@@ -44,25 +44,23 @@ DOCKERFILE
 add_caddy_override() {
     log "Creating docker-compose.override.yml with web + worker + Caddy..."
 
-    # Extract secrets from hermes.env
+    # Extract secrets
     local api_key=""
     local redis_pass=""
 
     if [[ -f "$DOCKER_DIR/hermes.env" ]]; then
-        api_key=$(grep "^API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
+        api_key=$(grep "^HERMES_API_KEY=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
         redis_pass=$(grep "^REDIS_PASSWORD=" "$DOCKER_DIR/hermes.env" | cut -d'=' -f2- || true)
     fi
 
     if [[ -z "$api_key" ]]; then
         api_key=$(openssl rand -hex 32)
-        echo "API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
-        log "✓ Generated new API_KEY"
-    else
-        log "✓ Loaded existing API_KEY from hermes.env"
+        echo "HERMES_API_KEY=$api_key" >> "$DOCKER_DIR/hermes.env"
+        log "✓ Generated new HERMES_API_KEY"
     fi
 
     if [[ -z "$redis_pass" ]]; then
-        error "REDIS_PASSWORD not found in hermes.env - run install-titanx-docker.sh first"
+        log "⚠️ REDIS_PASSWORD not found in hermes.env"
     else
         log "✓ Loaded REDIS_PASSWORD"
     fi
@@ -80,13 +78,12 @@ services:
     environment:
       - HERMES_URL=http://titanx-hermes:8642
       - HERMES_API_KEY=${api_key}
-      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 90s
+      start_period: 60s
 
   worker:
     image: titanx-web:latest
@@ -96,10 +93,14 @@ services:
     depends_on:
       - redis
       - hermes
+    env_file:
+      - hermes.env
     environment:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - HERMES_URL=http://titanx-hermes:8642
       - HERMES_API_KEY=${api_key}
+    volumes:
+      - ${PROJECT_DIR}/web:/app
     networks:
       - titanx-net
 
@@ -125,6 +126,7 @@ volumes:
   caddy_config:
 EOF
 
+    # Caddyfile
     cat > "$DOCKER_DIR/Caddyfile" << 'EOF'
 {
     auto_https off
@@ -143,20 +145,24 @@ EOF
 }
 EOF
 
-    log "✅ docker-compose.override.yml created with worker + Caddy"
+    log "✅ docker-compose.override.yml created with worker scaling support"
 }
 
 build_and_start() {
     log "Building titanx-web image and starting stack..."
 
+    # Build the web image (contains app.py + worker.py)
     cd "${WEB_DIR}" || error "web directory not found"
-    docker build -t titanx-web:latest . || error "Build failed"
-    log "✓ titanx-web image built successfully"
+    docker build -t titanx-web:latest . || error "Failed to build titanx-web image"
 
-    cd "$DOCKER_DIR" || error "docker directory not found"
-    docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build --scale worker=3
-    
-    log "✅ Stack started with 3 worker replicas"
+    cd "$DOCKER_DIR"
+
+    # Start services with worker scaling, forcing recreation for fresh state
+    docker compose up -d --build --force-recreate --scale worker=3 web worker caddy
+
+    log "✅ TitanX Stack started successfully with 3 worker replicas"
+    log "Web UI → http://YOUR_SERVER_IP (via Caddy)"
+    log "Workers → 3 replicas active"
 }
 
 main() {
