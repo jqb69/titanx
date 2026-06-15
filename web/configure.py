@@ -1,3 +1,4 @@
+# web/config.py
 import os
 HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642").rstrip("/")
 HERMES_API_KEY = os.getenv("HERMES_API_KEY", "")
