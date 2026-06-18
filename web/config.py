@@ -10,15 +10,14 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")  # Smart fre
 # Reasoning settings
 REASONING_ENABLED = os.getenv("REASONING_ENABLED", "true").lower() == "true"
 REASONING_EFFORT = os.getenv("REASONING_EFFORT", "medium")
-# Fallback endpoints
-ENDPOINTS = [
-    "/v1/chat/completions",
-    "/chat/completions",
-    "/",
-    "/api/chat",
-    "/v1/chat",
-    "/message"
-]
+#Queue names
+HERMES_QUEUE = "hermes:jobs"
+AVANGARDE_QUEUE = "avangarde:jobs"
+RESULTS_QUEUE = "hermes:results"
+
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+
+ENDPOINTS = ["/v1/chat/completions"]
 CUSTOM_CSS = """
 <style>
  .stApp { background-color: #0a0a0a; color: #ffffff; }
