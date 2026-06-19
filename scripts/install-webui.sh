@@ -95,11 +95,13 @@ services:
     depends_on:
       - redis
       - hermes
+      - hermes-avangarde
     env_file:
       - hermes.env
     environment:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
       - HERMES_URL=http://titanx-hermes:8642
+      - AVANGARDE_URL=http://hermes-avangarde:8642
       - HERMES_API_KEY=${api_key}
     volumes:
       - ${PROJECT_DIR}/web:/app
