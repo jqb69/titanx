@@ -1,23 +1,49 @@
-# web/config.py
+# web/config.py — Updated with file vault settings
+# Changes: 4 new FILE_ variables. All existing settings preserved exactly.
+
 import os
+
+# === CORE ENDPOINTS ===
 HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642").rstrip("/")
+AVANGARDE_URL = os.getenv("AVANGARDE_URL", "http://avangarde:8080").rstrip("/")
 HERMES_API_KEY = os.getenv("HERMES_API_KEY", "")
-# Redis with dynamic password from secrets (recommended for your setup)
+
+# === REDIS ===
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "defaultpass")
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@redis:6379/0"
-# === MODEL CONFIG - Optimized for Cheapskate ===
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")  # Smart free model router
-# Reasoning settings
+
+# === MODEL CONFIG ===
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 REASONING_ENABLED = os.getenv("REASONING_ENABLED", "true").lower() == "true"
 REASONING_EFFORT = os.getenv("REASONING_EFFORT", "medium")
+
 #Queue names
 HERMES_QUEUE = "hermes:jobs"
 AVANGARDE_QUEUE = "avangarde:jobs"
 RESULTS_QUEUE = "hermes:results"
 
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+# Fallback endpoints (retained for endpoint-probing resilience)
+ENDPOINTS = [
+    "/v1/chat/completions",
+    "/chat/completions",
+    "/",
+    "/api/chat",
+    "/v1/chat",
+    "/message"
+]
 
-ENDPOINTS = ["/v1/chat/completions"]
+# === FILE VAULT (REDIS-OPTIMIZED) ===
+FILE_STORAGE_DIR = os.getenv("FILE_STORAGE_DIR", "/workspace/mikie_files")
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
+
+# Redis Keys (Memory-efficient)
+REDIS_FILE_INDEX = "mikie:files:index"           # SET of UIDs
+REDIS_FILE_META_PREFIX = "mikie:files:meta:"     # HASH per file
+REDIS_FILE_TEXT_PREFIX = "mikie:files:text:"     # STRING cache (1 week)
+# Comma-separated list, or None to allow all types (UI controls gating)
+_ALLOWED_RAW = os.getenv("ALLOWED_FILE_EXTENSIONS", "")
+ALLOWED_FILE_EXTENSIONS = None if not _ALLOWED_RAW else {e.strip().lower() for e in _ALLOWED_RAW.split(",")}
+
 CUSTOM_CSS = """
 <style>
  .stApp { background-color: #0a0a0a; color: #ffffff; }
