@@ -77,9 +77,12 @@ services:
       - titanx-net
     depends_on:
       - hermes
+    env_file:
+      - hermes.env   
     environment:
       - HERMES_URL=http://titanx-hermes:8642
       - HERMES_API_KEY=${api_key}     # Still pass as HERMES_API_KEY to client.py
+      - REDIS_URL=redis://:${redis_pass}@redis:6379/0
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
