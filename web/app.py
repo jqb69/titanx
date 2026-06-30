@@ -6,6 +6,8 @@ try:
     import ui
     import client
     import config
+    import file_ui
+    import files 
 except Exception as e:
     st.error(f"🚨 Critical module load error: {e}")
     st.stop()
@@ -17,6 +19,7 @@ def main():
     file_content_matrix = ui.render_sidebar_controls()
     ui.render_header()
     ui.render_chat_history()
+    file_ui.render_attachment_bar()
 
     if user_input_prompt := st.chat_input("Ask MIKIE anything..."):
         state.set_stop_flag(False)
