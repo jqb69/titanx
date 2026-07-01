@@ -223,3 +223,16 @@ def build_context_from_attached(uids: List[str]) -> Tuple[str, List[Dict]]:
         })
 
     return "\n\n".join(parts), records
+# Add this at the very end of web/files.py
+def format_message_with_files(user_prompt: str, file_context: str) -> str:
+    """Produce the exact marker format that client.format_messages() already expects.
+    This keeps ZERO changes needed in client.py."""
+    if not file_context or not file_context.strip():
+        return user_prompt
+
+    return (
+        f"--- LOCAL WORKSPACE FILE ATTACHED ---\n"
+        f"{file_context}\n\n"
+        f"User Message: {user_prompt}"
+    )
+  
