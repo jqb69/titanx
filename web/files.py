@@ -1,7 +1,6 @@
-# web/files.py — Redis-first file vault (compatible with file_ui.py)
+# web/files.py — Redis-first file vault (safe, compatible with file_ui.py)
 import os
 import hashlib
-import base64
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
@@ -35,10 +34,27 @@ class FileMeta:
 
     @staticmethod
     def from_dict(d: Dict) -> "FileMeta":
-        d = dict(d)
-        d['size_bytes'] = int(d.get('size_bytes', 0))
-        d['deleted'] = str(d.get('deleted', 'false')).lower() == 'true'
-        return FileMeta(**d)
+        """Safe conversion from Redis (all strings)"""
+        d = dict(d)  # copy
+        try:
+            d['size_bytes'] = int(d.get('size_bytes', 0))
+            d['deleted'] = str(d.get('deleted', 'false')).lower() == 'true'
+            d.setdefault('mime_hint', 'application/octet-stream')
+            d.setdefault('uploaded_at', datetime.utcnow().isoformat())
+            d.setdefault('storage_path', '')
+            return FileMeta(**d)
+        except Exception:
+            # Fallback safe object
+            return FileMeta(
+                uid=d.get('uid', 'unknown'),
+                name=d.get('name', 'unknown'),
+                ext=d.get('ext', ''),
+                size_bytes=int(d.get('size_bytes', 0)),
+                mime_hint=d.get('mime_hint', 'application/octet-stream'),
+                uploaded_at=d.get('uploaded_at', datetime.utcnow().isoformat()),
+                storage_path=d.get('storage_path', ''),
+                deleted=str(d.get('deleted', 'false')).lower() == 'true'
+            )
 
 
 def _ensure_dirs():
@@ -58,6 +74,7 @@ def store_uploaded_file(filename: str, content: bytes) -> Tuple[Optional[FileMet
     uid = _compute_uid(content)
     path = os.path.join(_FILE_STORAGE_DIR, f"{uid}{ext}")
 
+    # Deduplication
     if r.sismember(config.REDIS_FILE_INDEX, uid):
         raw = r.hgetall(f"{config.REDIS_FILE_META_PREFIX}{uid}")
         if raw and os.path.exists(raw.get("storage_path", "")):
@@ -74,7 +91,10 @@ def store_uploaded_file(filename: str, content: bytes) -> Tuple[Optional[FileMet
         return None, f"Write error: {e}"
 
     meta = FileMeta(
-        uid=uid, name=filename, ext=ext, size_bytes=len(content),
+        uid=uid,
+        name=filename,
+        ext=ext,
+        size_bytes=len(content),
         mime_hint="text/plain" if ext in {".txt",".md",".py",".json",".csv",".sh"} else "application/octet-stream",
         uploaded_at=datetime.utcnow().isoformat(),
         storage_path=path
@@ -100,13 +120,12 @@ def list_stored_files(include_deleted: bool = False) -> List[FileMeta]:
 
 
 def total_storage_used() -> int:
-    """Used by file_ui.py"""
     uids = r.smembers(config.REDIS_FILE_INDEX)
     total = 0
     for uid in uids:
-        raw = r.hget(f"{config.REDIS_FILE_META_PREFIX}{uid}", "size_bytes")
-        if raw:
-            total += int(raw)
+        size_str = r.hget(f"{config.REDIS_FILE_META_PREFIX}{uid}", "size_bytes")
+        if size_str:
+            total += int(size_str)
     return total
 
 
@@ -120,7 +139,6 @@ def get_file_meta(uid: str) -> Optional[FileMeta]:
 
 
 def extract_text_for_llm(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
-    """Used by file_ui.py for preview"""
     cache_key = f"{config.REDIS_FILE_TEXT_PREFIX}{meta.uid}"
     cached = r.get(cache_key)
     if cached:
@@ -128,7 +146,7 @@ def extract_text_for_llm(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
 
     text, err = _extract_text(meta)
     if text:
-        r.setex(cache_key, 604800, text)  # 7 days
+        r.setex(cache_key, 604800, text)
     return text, err
 
 
@@ -165,7 +183,6 @@ def _extract_text(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
 
 
 def delete_file(uid: str, hard_delete: bool = True) -> bool:
-    """Hard delete by default to save disk space."""
     raw = r.hgetall(f"{config.REDIS_FILE_META_PREFIX}{uid}")
     if not raw:
         return False
@@ -182,3 +199,27 @@ def delete_file(uid: str, hard_delete: bool = True) -> bool:
     r.delete(f"{config.REDIS_FILE_TEXT_PREFIX}{uid}")
     r.srem(config.REDIS_FILE_INDEX, uid)
     return True
+
+
+def build_context_from_attached(uids: List[str]) -> Tuple[str, List[Dict]]:
+    """Returns (context_string, records) — used by file_ui.py"""
+    parts = []
+    records = []
+    for uid in uids:
+        meta = get_file_meta(uid)
+        if not meta:
+            continue
+
+        text, _ = extract_text_for_llm(meta)
+        header = f"=== FILE: {meta.name} ({meta.size_bytes} bytes) ==="
+        body = text or f"[Binary file: {meta.name}]"
+        parts.append(f"{header}\n{body}")
+
+        records.append({
+            "uid": uid,
+            "name": meta.name,
+            "ext": meta.ext,
+            "size": meta.size_bytes
+        })
+
+    return "\n\n".join(parts), records
