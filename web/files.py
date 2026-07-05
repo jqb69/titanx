@@ -1,4 +1,4 @@
-# web/files.py — Redis-first file vault (safe, compatible with file_ui.py)
+# web/files.py — 4GB Droplet Optimized File Vault
 import os
 import hashlib
 from datetime import datetime
@@ -12,7 +12,8 @@ from redis import Redis
 r = Redis.from_url(config.REDIS_URL, decode_responses=True)
 
 _FILE_STORAGE_DIR = getattr(config, "FILE_STORAGE_DIR", "/workspace/mikie_files")
-_MAX_BYTES = getattr(config, "MAX_FILE_SIZE_MB", 50) * 1024 * 1024
+_MAX_BYTES = getattr(config, "MAX_FILE_SIZE_MB", 20) * 1024 * 1024   # lowered default
+_MAX_CONTEXT_CHARS = 100_000   # ~25k tokens safe limit
 
 
 @dataclass
@@ -34,27 +35,10 @@ class FileMeta:
 
     @staticmethod
     def from_dict(d: Dict) -> "FileMeta":
-        """Safe conversion from Redis (all strings)"""
-        d = dict(d)  # copy
-        try:
-            d['size_bytes'] = int(d.get('size_bytes', 0))
-            d['deleted'] = str(d.get('deleted', 'false')).lower() == 'true'
-            d.setdefault('mime_hint', 'application/octet-stream')
-            d.setdefault('uploaded_at', datetime.utcnow().isoformat())
-            d.setdefault('storage_path', '')
-            return FileMeta(**d)
-        except Exception:
-            # Fallback safe object
-            return FileMeta(
-                uid=d.get('uid', 'unknown'),
-                name=d.get('name', 'unknown'),
-                ext=d.get('ext', ''),
-                size_bytes=int(d.get('size_bytes', 0)),
-                mime_hint=d.get('mime_hint', 'application/octet-stream'),
-                uploaded_at=d.get('uploaded_at', datetime.utcnow().isoformat()),
-                storage_path=d.get('storage_path', ''),
-                deleted=str(d.get('deleted', 'false')).lower() == 'true'
-            )
+        d = dict(d)
+        d['size_bytes'] = int(d.get('size_bytes', 0))
+        d['deleted'] = str(d.get('deleted', 'false')).lower() == 'true'
+        return FileMeta(**d)
 
 
 def _ensure_dirs():
@@ -74,7 +58,6 @@ def store_uploaded_file(filename: str, content: bytes) -> Tuple[Optional[FileMet
     uid = _compute_uid(content)
     path = os.path.join(_FILE_STORAGE_DIR, f"{uid}{ext}")
 
-    # Deduplication
     if r.sismember(config.REDIS_FILE_INDEX, uid):
         raw = r.hgetall(f"{config.REDIS_FILE_META_PREFIX}{uid}")
         if raw and os.path.exists(raw.get("storage_path", "")):
@@ -106,16 +89,15 @@ def store_uploaded_file(filename: str, content: bytes) -> Tuple[Optional[FileMet
     return meta, None
 
 
-def list_stored_files(include_deleted: bool = False) -> List[FileMeta]:
+def list_stored_files() -> List[FileMeta]:
     uids = r.smembers(config.REDIS_FILE_INDEX)
     files = []
     for uid in uids:
         raw = r.hgetall(f"{config.REDIS_FILE_META_PREFIX}{uid}")
         if raw:
             meta = FileMeta.from_dict(raw)
-            if include_deleted or not meta.deleted:
-                if os.path.exists(meta.storage_path):
-                    files.append(meta)
+            if not meta.deleted and os.path.exists(meta.storage_path):
+                files.append(meta)
     return sorted(files, key=lambda x: x.uploaded_at, reverse=True)
 
 
@@ -146,7 +128,7 @@ def extract_text_for_llm(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
 
     text, err = _extract_text(meta)
     if text:
-        r.setex(cache_key, 604800, text)
+        r.setex(cache_key, 604800, text)  # 7 days cache
     return text, err
 
 
@@ -155,31 +137,48 @@ def _extract_text(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
         return None, "File missing"
 
     try:
-        with open(meta.storage_path, "rb") as f:
-            raw = f.read()
-
-        if meta.ext in {".txt",".md",".py",".json",".csv",".sh",".yml",".yaml"}:
-            return raw.decode("utf-8", errors="ignore"), None
-
+        # Text files — lazy read
+        text_extensions = {
+            ".txt", ".md", ".py", ".json", ".csv", ".sh", ".yml", ".yaml",
+            ".js", ".ts", ".html", ".css", ".xml", ".sql", ".log"
+        }
+        if meta.ext in text_extensions:
+            with open(meta.storage_path, "rb") as f:
+                return f.read().decode("utf-8", errors="ignore"), None
         if meta.ext == ".pdf":
-            try:
-                import PyPDF2
-                reader = PyPDF2.PdfReader(meta.storage_path)
-                return "\n\n".join(p.extract_text() or "" for p in reader.pages), None
-            except Exception as e:
-                return None, f"PDF error: {e}"
+            text = _extract_pdf_text(meta.storage_path)
+            return text, None
 
         if meta.ext == ".docx":
             try:
                 import docx
                 doc = docx.Document(meta.storage_path)
-                return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip()), None
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                return "\n\n".join(paragraphs), None
             except Exception as e:
                 return None, f"DOCX error: {e}"
 
         return f"[Binary file: {meta.name}]", None
     except Exception as e:
         return None, str(e)
+
+
+
+
+def _extract_pdf_text(path: str) -> str:
+    """Multi-engine PDF extraction with fallbacks"""
+    # 1. PyPDF2 (already installed)
+    try:
+        import PyPDF2
+        reader = PyPDF2.PdfReader(path)
+        text = "\n\n".join(p.extract_text() or "" for p in reader.pages)
+        if text.strip():
+            return text
+    except Exception:
+        pass
+
+
+    return f"[PDF: {Path(path).name} — no extractable text (scanned/image-based PDF)]"
 
 
 def delete_file(uid: str, hard_delete: bool = True) -> bool:
@@ -202,9 +201,11 @@ def delete_file(uid: str, hard_delete: bool = True) -> bool:
 
 
 def build_context_from_attached(uids: List[str]) -> Tuple[str, List[Dict]]:
-    """Returns (context_string, records) — used by file_ui.py"""
+    """Memory-safe context building with truncation"""
     parts = []
     records = []
+    total_chars = 0
+
     for uid in uids:
         meta = get_file_meta(uid)
         if not meta:
@@ -212,27 +213,20 @@ def build_context_from_attached(uids: List[str]) -> Tuple[str, List[Dict]]:
 
         text, _ = extract_text_for_llm(meta)
         header = f"=== FILE: {meta.name} ({meta.size_bytes} bytes) ==="
-        body = text or f"[Binary file: {meta.name}]"
-        parts.append(f"{header}\n{body}")
+        entry = f"{header}\n{text or '[Binary file]'}"
 
-        records.append({
-            "uid": uid,
-            "name": meta.name,
-            "ext": meta.ext,
-            "size": meta.size_bytes
-        })
+        if total_chars + len(entry) > _MAX_CONTEXT_CHARS:
+            parts.append("[Additional files truncated due to context limit]")
+            break
+
+        parts.append(entry)
+        total_chars += len(entry)
+        records.append({"uid": uid, "name": meta.name, "ext": meta.ext, "size": meta.size_bytes})
 
     return "\n\n".join(parts), records
-# Add this at the very end of web/files.py
+
+
 def format_message_with_files(user_prompt: str, file_context: str) -> str:
-    """Produce the exact marker format that client.format_messages() already expects.
-    This keeps ZERO changes needed in client.py."""
     if not file_context or not file_context.strip():
         return user_prompt
-
-    return (
-        f"--- LOCAL WORKSPACE FILE ATTACHED ---\n"
-        f"{file_context}\n\n"
-        f"User Message: {user_prompt}"
-    )
-  
+    return f"--- LOCAL WORKSPACE FILE ATTACHED ---\n{file_context}\n\nUser Message: {user_prompt}"
