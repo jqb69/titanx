@@ -24,6 +24,11 @@ create_requirements_and_dockerfile() {
 streamlit
 requests
 redis
+PyPDF2
+python-docx
+pymupdf
+pdfplumber
+Pillow
 EOF
 
     cat > "$WEB_DIR/Dockerfile" << 'DOCKERFILE'
