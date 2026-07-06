@@ -1,7 +1,7 @@
 import requests
 import json
 import time
-import streamlit as st
+#import streamlit as st
 from typing import List, Dict, Tuple
 import config
 import state
@@ -10,9 +10,13 @@ import worker
 
 
 def check_hermes_health(url: str = None) -> bool:
+    """Check health of a Hermes instance."""
     url = url or config.HERMES_URL
     try:
-        headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"} if getattr(config, "HERMES_API_KEY", None) else {}
+        headers = {}
+        if getattr(config, "HERMES_API_KEY", None):
+            headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"}
+
         r = requests.get(f"{url}/health", headers=headers, timeout=4)
         return r.status_code == 200
     except Exception:
@@ -20,17 +24,17 @@ def check_hermes_health(url: str = None) -> bool:
 
 
 def format_messages(raw_messages: List[Dict]) -> List[Dict]:
-    formatted: List[Dict] = []
+    formatted = []
     for msg in raw_messages:
         role = msg.get("role")
         if role not in ["user", "assistant", "system"]:
             continue
         content = msg.get("content", "")
-        if "--- LOCAL WORKSPACE FILE ATTACHED ---" in content:
-            content = content.split("User Message:")[-1].strip() if "User Message:" in content else content
+        # DO NOT strip file content — let the AI see it
+        # if "--- LOCAL WORKSPACE FILE ATTACHED ---" in content:
+        #     content = content.split("User Message:")[-1].strip()
         formatted.append({"role": role, "content": content})
     return formatted
-
 
 def extract_thinking_and_answer(full_text: str) -> Tuple[str, str]:
     think_match = re.search(r'<think>(.*?)</think>', full_text, re.DOTALL | re.IGNORECASE)
