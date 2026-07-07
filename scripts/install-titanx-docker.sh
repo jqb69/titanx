@@ -166,6 +166,7 @@ services:
     volumes:
       - ${HERMES_DATA}:/opt/data
       - ${WORKSPACE_MAIN}:/workspace
+      - ${WORKSPACE_MAIN}/uploaded:/workspace/uploaded
       - /home/${USER}/.ssh:/opt/ssh:ro
     environment:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
@@ -174,6 +175,7 @@ services:
       - API_SERVER_KEY=${api_key}
       - OPENROUTER_MODEL=${openrouter_model}
       - WORKSPACE_DIR=/workspace
+      - UPLOAD_DIR=/workspace/uploaded
       - HOST=0.0.0.0
       - PORT=8642
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
@@ -196,6 +198,7 @@ services:
     volumes:
       - ${HERMES_DATA}:/opt/data
       - ${WORKSPACE_MAIN}/avangarde:/workspace
+      - ${WORKSPACE_MAIN}/uploaded:/workspace/uploaded
       - /home/${USER}/.ssh:/opt/ssh:ro
     environment:
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
@@ -204,6 +207,7 @@ services:
       - API_SERVER_KEY=${api_key}
       - OPENROUTER_MODEL=${openrouter_model}
       - WORKSPACE_DIR=/workspace
+      - UPLOAD_DIR=/workspace/uploaded
       - HOST=0.0.0.0
       - PORT=8642
     entrypoint: ["/bin/bash", "/opt/data/entrypoint.sh"]
@@ -220,6 +224,26 @@ EOF
     log "✓ docker-compose.yml written successfully"
 }
 
+setup_workspace() {
+    log "Setting up shared workspace with uploaded vault..."
+
+    local workspace_main="${PROJECT_DIR}/workspace"
+    local UPLOAD_DIR="${workspace_main}/uploaded"
+    local AVANGARDE_DIR="${workspace_main}/avangarde"
+
+    mkdir -p "$workspace_main" "$UPLOAD_DIR" "$AVANGARDE_DIR"
+
+    local RUNNER_UID="${RUNNER_UID:-$(id -u $USER 2>/dev/null || echo 1000)}"
+    local RUNNER_GID="${RUNNER_GID:-$(id -g $USER 2>/dev/null || echo 1000)}"
+
+    log "🔒 Ownership → UID:${RUNNER_UID} GID:${RUNNER_GID}"
+    chown -R "${RUNNER_UID}:${RUNNER_GID}" "$workspace_main"
+
+    chmod 775 "$workspace_main" "$AVANGARDE_DIR"
+    chmod 777 "$UPLOAD_DIR"
+
+    log "✅ Workspace ready → ${UPLOAD_DIR}"
+}
 
 # ====================== MAIN CONFIGURATION ======================
 configure_and_launch() {
@@ -255,16 +279,17 @@ configure_and_launch() {
     # ----------------------------------------------------------------------
     log "📁 Creating required directories…"
     mkdir -p "$DOCKER_DIR" "$HERMES_DATA" "$workspace_main" "$workspace_avangarde"
+    setup_workspace   # Now safe
 
-    log "🔒 Applying strict ownership and mode"
-    chown -R "${RUNNER_UID}:${RUNNER_GID}" "$HERMES_DATA" "$workspace_main" "$workspace_avangarde"
+    log "🔒 Applying strict ownership..."
+    chown -R "${RUNNER_UID}:${RUNNER_GID}" "$HERMES_DATA" "$workspace_main"
     chmod 700 "$HERMES_DATA"
-    chmod 2770 "$workspace_main" "$workspace_avangarde"
+    #chmod 2770 "$workspace_main" "$workspace_avangarde"
 
     if ! find "$workspace_main" -type d -exec chmod 2770 {} + 2>/dev/null; then
         log "⚠️ Recursive chmod on $workspace_main failed – proceeding"
     fi
-
+    
     # ----------------------------------------------------------------------
     # 4️⃣ Git Sync (Atomic)
     # ----------------------------------------------------------------------
