@@ -7,7 +7,12 @@ import os
 HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642").rstrip("/")
 AVANGARDE_URL = os.getenv("AVANGARDE_URL", "http://avangarde:8080").rstrip("/")
 HERMES_API_KEY = os.getenv("HERMES_API_KEY", "")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/workspace/uploaded")
 
+
+# Ensure dirs exist + permissions
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.chmod(UPLOAD_DIR, 0o777)  # or more restrictive with umask + grou
 # === REDIS ===
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "defaultpass")
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@redis:6379/0"
