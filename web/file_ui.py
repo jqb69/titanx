@@ -13,7 +13,7 @@ import config
 # ---------------------------------------------------------------------------
 _ATTACH_KEY = "mikie_attached_uids"
 _UPLOAD_KEY = "mikie_file_uploader"
-
+UPLOAD_DIR = getattr(config, "UPLOAD_DIR", "/workspace/uploaded")
 
 def _get_attached() -> List[str]:
     return st.session_state.get(_ATTACH_KEY, [])
@@ -49,85 +49,72 @@ _TYPE_ICON = {
 def _icon_for(ext: str) -> str:
     return _TYPE_ICON.get(ext.lower(), "📎")
 
-
 def _fmt_size(b: int) -> str:
-    if b < 1024:
-        return f"{b} B"
-    if b < 1024 * 1024:
-        return f"{b / 1024:.1f} KB"
+    if b < 1024: return f"{b} B"
+    if b < 1024 * 1024: return f"{b / 1024:.1f} KB"
     return f"{b / (1024 * 1024):.1f} MB"
-
 
 # ---------------------------------------------------------------------------
 # 1. Sidebar file manager (upload + list + actions)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 1. Sidebar File Manager
+# ---------------------------------------------------------------------------
 def render_file_manager() -> None:
-    """Render the complete file management panel inside the sidebar.
-    Call this from ui.render_sidebar_controls() in place of the old single-file uploader."""
-
     st.subheader("📁 File Vault")
-    st.caption("Upload, manage & attach files to your queries")
+    st.caption(f"Storing to: `{UPLOAD_DIR}`")
     st.markdown("---")
 
-    # --- Upload area ---
     uploaded_files = st.file_uploader(
-        "Upload files",
-        accept_multiple_files=True,
-        key=_UPLOAD_KEY,
-        label_visibility="collapsed",
+        "Upload files", accept_multiple_files=True,
+        key=_UPLOAD_KEY, label_visibility="collapsed"
     )
 
     if uploaded_files:
-        for uploaded in uploaded_files:
-            content = uploaded.read()
-            meta, err = files.store_uploaded_file(uploaded.name, content)
-            if err:
-                st.error(f"❌ {uploaded.name}: {err}")
-            else:
-                st.success(f"✅ Uploaded {_icon_for(meta.ext)} {meta.name} ({_fmt_size(meta.size_bytes)})")
-                # Auto-attach newly uploaded files
-                if meta.uid not in _get_attached():
-                    _toggle_attach(meta.uid)
-        st.markdown("---")
+        with st.spinner("Processing uploads..."):
+            for uploaded in uploaded_files:
+                content = uploaded.read()
+                meta, err = files.store_uploaded_file(uploaded.name, content)
+                if err:
+                    st.error(f"❌ {uploaded.name}: {err}")
+                else:
+                    st.success(f"✅ {_icon_for(meta.ext)} {meta.name} ({_fmt_size(meta.size_bytes)})")
+                    if meta.uid not in _get_attached():
+                        _toggle_attach(meta.uid)
+        st.rerun()
 
-    # --- Stored file list ---
+    st.markdown("---")
+
     stored = files.list_stored_files()
-
     if not stored:
         st.info("No files stored yet. Upload above to get started.")
         return
 
-    st.markdown(f"**{len(stored)} file(s) stored** — {_fmt_size(files.total_storage_used())} total")
+    total = files.total_storage_used()
+    if total > 500 * 1024 * 1024:
+        st.warning(f"⚠️ High storage usage: {_fmt_size(total)}")
+
+    st.markdown(f"**{len(stored)} file(s) stored** — {_fmt_size(total)} total")
     st.markdown("---")
 
     attached = _get_attached()
-
     for meta in stored:
         cols = st.columns([0.08, 0.52, 0.2, 0.2])
 
-        # Checkbox to attach/detach
         is_attached = meta.uid in attached
         with cols[0]:
-            if st.checkbox(
-                "",
-                value=is_attached,
-                key=f"attach_{meta.uid}",
-                label_visibility="collapsed",
-            ):
+            if st.checkbox("", value=is_attached, key=f"attach_{meta.uid}", label_visibility="collapsed"):
                 if not is_attached:
                     _toggle_attach(meta.uid)
                     st.rerun()
-            else:
-                if is_attached:
-                    _toggle_attach(meta.uid)
-                    st.rerun()
+            elif is_attached:
+                _toggle_attach(meta.uid)
+                st.rerun()
 
-        # File name + icon
         with cols[1]:
             icon = _icon_for(meta.ext)
             label = f"{icon} {meta.name}"
-            # Expander for preview
             with st.expander(label, expanded=False):
                 text, err = files.extract_text_for_llm(meta)
                 if err:
@@ -138,16 +125,13 @@ def render_file_manager() -> None:
                 else:
                     st.info("No text content extracted.")
 
-        # Size + type
         with cols[2]:
-            st.caption(f"{_fmt_size(meta.size_bytes)}")
+            st.caption(_fmt_size(meta.size_bytes))
             st.caption(f"`{meta.ext or 'unknown'}`")
 
-        # Delete action
         with cols[3]:
             if st.button("🗑️", key=f"del_{meta.uid}", help="Remove file"):
                 files.delete_file(meta.uid)
-                # Also detach if attached
                 if meta.uid in _get_attached():
                     _toggle_attach(meta.uid)
                 st.rerun()
@@ -156,8 +140,7 @@ def render_file_manager() -> None:
     c1, c2 = st.columns(2)
     with c1:
         if st.button("📎 Attach All", use_container_width=True):
-            all_uids = [m.uid for m in stored]
-            _set_attached(all_uids)
+            _set_attached([m.uid for m in stored])
             st.rerun()
     with c2:
         if st.button("❌ Detach All", use_container_width=True):
