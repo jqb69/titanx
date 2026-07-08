@@ -11,7 +11,7 @@ from redis import Redis
 
 r = Redis.from_url(config.REDIS_URL, decode_responses=True)
 
-_FILE_STORAGE_DIR = getattr(config, "FILE_STORAGE_DIR", "/workspace/mikie_files")
+_FILE_STORAGE_DIR = getattr(config, "UPLOAD_DIR", "/workspace/uploaded")
 _MAX_BYTES = getattr(config, "MAX_FILE_SIZE_MB", 20) * 1024 * 1024   # lowered default
 _MAX_CONTEXT_CHARS = 100_000   # ~25k tokens safe limit
 
