@@ -79,10 +79,10 @@ def render_file_manager() -> None:
                 if err:
                     st.error(f"❌ {uploaded.name}: {err}")
                 else:
-                    st.success(f"✅ {_icon_for(meta.ext)} {meta.name} ({_fmt_size(meta.size_bytes)})")
+                    st.success(f"✅ {_icon_for(meta.ext)} {meta.name} ({_fmt_size(eta.size_bytes)})")
                     if meta.uid not in _get_attached():
                         _toggle_attach(meta.uid)
-        st.rerun()
+    
 
     st.markdown("---")
 
@@ -104,11 +104,8 @@ def render_file_manager() -> None:
 
         is_attached = meta.uid in attached
         with cols[0]:
-            if st.checkbox("", value=is_attached, key=f"attach_{meta.uid}", label_visibility="collapsed"):
-                if not is_attached:
-                    _toggle_attach(meta.uid)
-                    st.rerun()
-            elif is_attached:
+            new_state = st.checkbox("", value=is_attached, key=f"attach_{meta.uid}", label_visibility="collapsed")
+            if new_state != is_attached:
                 _toggle_attach(meta.uid)
                 st.rerun()
 
