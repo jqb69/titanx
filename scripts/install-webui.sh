@@ -6,6 +6,7 @@ USER="ajax"
 PROJECT_DIR="/home/${USER}/titanx"
 WEB_DIR="${PROJECT_DIR}/web"
 DOCKER_DIR="${PROJECT_DIR}/docker"
+WORKSPACE_MAIN="${PROJECT_DIR}/workspace"   # Miki addition
 
 log() { echo "[$(date '+%H:%M:%S')] [WEB-UI] $*"; }
 error() { echo "[ERROR] $*" >&2; exit 1; }
@@ -20,20 +21,24 @@ check_web_source() {
 
 create_requirements_and_dockerfile() {
     log "Creating requirements and Dockerfile..."
+
     cat > "$WEB_DIR/requirements.txt" << 'EOF'
 streamlit
-requests
 redis
 PyPDF2
-python-docx
-pymupdf
 pdfplumber
+pymupdf
 Pillow
+pytesseract
+python-docx
 EOF
 
     cat > "$WEB_DIR/Dockerfile" << 'DOCKERFILE'
 FROM python:3.11-slim
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
@@ -43,12 +48,12 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)" || exit 1
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--theme.base=dark"]
 DOCKERFILE
-
 }
-
 
 add_caddy_override() {
     log "Creating docker-compose.override.yml with web + worker + Caddy..."
+
+    mkdir -p "${WORKSPACE_MAIN}/uploaded"   # Miki addition
 
     local api_key=""
     local redis_pass=""
@@ -86,8 +91,11 @@ services:
       - hermes.env   
     environment:
       - HERMES_URL=http://titanx-hermes:8642
-      - HERMES_API_KEY=${api_key}     # Still pass as HERMES_API_KEY to client.py
+      - HERMES_API_KEY=${api_key}
       - REDIS_URL=redis://:${redis_pass}@redis:6379/0
+      - UPLOAD_DIR=/workspace/uploaded     # Miki addition
+    volumes:
+      - ${WORKSPACE_MAIN}/uploaded:/workspace/uploaded   # Miki addition
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)\" 2>/dev/null || exit 1"]
       interval: 30s
@@ -162,18 +170,14 @@ EOF
 build_and_start() {
     log "Building titanx-web image and starting stack..."
 
-    # Build the web image (contains app.py + worker.py)
     cd "${WEB_DIR}" || error "web directory not found"
     docker build -t titanx-web:latest . || error "Failed to build titanx-web image"
 
     cd "$DOCKER_DIR"
-
-    # Start services with worker scaling, forcing recreation for fresh state
     docker compose up -d --build --force-recreate --scale worker=3 web worker caddy
 
     log "✅ TitanX Stack started successfully with 3 worker replicas"
     log "Web UI → http://YOUR_SERVER_IP (via Caddy)"
-    log "Workers → 3 replicas active"
 }
 
 main() {
