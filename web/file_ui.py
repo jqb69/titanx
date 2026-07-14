@@ -131,7 +131,7 @@ def render_file_manager() -> None:
                 files.delete_file(meta.uid)
                 if meta.uid in _get_attached():
                     _toggle_attach(meta.uid)
-                st.rerun()
+                #st.rerun()
 
     st.markdown("---")
     c1, c2 = st.columns(2)
