@@ -39,7 +39,16 @@ class FileMeta:
         d['size_bytes'] = int(d.get('size_bytes', 0))
         d['deleted'] = str(d.get('deleted', 'false')).lower() == 'true'
         return FileMeta(**d)
-
+# At module top (after other imports)
+try:
+    import pytesseract
+    from PIL import Image
+    import fitz  # pymupdf
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    pytesseract = None
+    print("⚠️ OCR modules (pytesseract + pymupdf) not available — scanned PDFs limited")
 
 def _ensure_dirs():
     os.makedirs(_FILE_STORAGE_DIR, exist_ok=True)
@@ -163,23 +172,60 @@ def _extract_text(meta: FileMeta) -> Tuple[Optional[str], Optional[str]]:
         return None, str(e)
 
 
-
-
 def _extract_pdf_text(path: str) -> str:
-    """Multi-engine PDF extraction with fallbacks"""
-    # 1. PyPDF2 (already installed)
+    """Multi-engine PDF extraction: text layer → pdfplumber → OCR. 4GB-safe."""
+    filename = Path(path).name
+
+    # 1. PyPDF2
     try:
         import PyPDF2
         reader = PyPDF2.PdfReader(path)
         text = "\n\n".join(p.extract_text() or "" for p in reader.pages)
         if text.strip():
-            return text
+            return text.strip()
     except Exception:
         pass
 
+    # 2. pdfplumber
+    try:
+        import pdfplumber
+        with pdfplumber.open(path) as pdf:
+            text = "\n\n".join((pg.extract_text() or "") for pg in pdf.pages)
+        if text.strip():
+            return text.strip()
+    except Exception:
+        pass
 
-    return f"[PDF: {Path(path).name} — no extractable text (scanned/image-based PDF)]"
+    # 3. OCR Fallback
+    if not OCR_AVAILABLE:
+        return f"[PDF: {filename} — scanned/image PDF, OCR not available]"
 
+    try:
+        out = []
+        total_chars = 0
+        with fitz.open(path) as doc:
+            for page in doc:
+                pix = page.get_pixmap(dpi=150, colorspace=fitz.csGRAY)
+                with Image.open(io.BytesIO(pix.tobytes("png"))) as img:
+                    t = pytesseract.image_to_string(img, lang="eng", config='--psm 6')
+                
+                out.append(t.strip())
+                total_chars += len(t)
+                
+                del pix  # ← Moved BEFORE break (Miki fix)
+                
+                if total_chars > _MAX_CONTEXT_CHARS:
+                    break
+
+        ocr_text = "\n\n".join(out).strip()
+        if ocr_text:
+            return ocr_text
+    except Exception as e:
+        if out:
+            return "\n\n".join(out).strip()
+        return f"[PDF OCR failed on {filename}: {e}]"
+
+    return f"[PDF: {filename} — no extractable text (scanned/image-based PDF)]"
 
 def delete_file(uid: str, hard_delete: bool = True) -> bool:
     raw = r.hgetall(f"{config.REDIS_FILE_META_PREFIX}{uid}")
