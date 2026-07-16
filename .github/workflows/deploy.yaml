@@ -47,7 +47,7 @@ jobs:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
           username: root
           key: ${{ env.VALID_SSH_KEY }}
-          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY
+          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY,TWILIO_SID,TWILIO_AUTH_TOKEN,TWILIO_PHONE,GOOGLE_CLIENT_ID
           script_stop: true
           script: |
             set -euo pipefail
@@ -64,6 +64,11 @@ jobs:
           G_USER: ${{ secrets.GIT_USER }}
           G_TOKEN: ${{ secrets.GIT_TOKEN }}
           P_PRIVATE_KEY: ${{ secrets.PROJECT_PRIVATE_KEY }}
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE: ${{ secrets.TWILIO_PHONE }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          
 
       - name: Deploy App (as ajax)
         uses: appleboy/ssh-action@v1.0.3
