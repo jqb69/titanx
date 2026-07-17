@@ -323,8 +323,11 @@ configure_and_launch() {
         error "Decryption of $SECRETS_AGE failed"
     fi
 
+    
     local redis_pass="" openrouter_model=""
     local openrouter_api_key="" git_user="" github_token=""
+    local secret_key="" twilio_auth_token="" twilio_phone="" google_client_id=""
+
     while IFS='=' read -r key val || [[ -n $key ]]; do
         key=$(printf '%s' "$key" | tr -d '[:space:]')
         [[ -z "$key" || "$key" == \#* ]] && continue
@@ -335,6 +338,10 @@ configure_and_launch() {
             OPENROUTER_API_KEY) openrouter_api_key="$val" ;;
             GIT_USER) git_user="$val" ;;
             GIT_TOKEN) github_token="$val" ;;
+            SECRET_KEY) secret_key="$val" ;;
+            TWILIO_AUTH_TOKEN) twilio_auth_token="$val" ;;
+            TWILIO_PHONE) twilio_phone="$val" ;;
+            GOOGLE_CLIENT_ID) google_client_id="$val" ;;
         esac
     done <"$temp_env"
 
@@ -364,6 +371,21 @@ configure_and_launch() {
             log "✓ Reusing active API_KEY in env file"
         fi
     fi
+    
+    # --- SECRET_KEY (generate if missing) ---
+    if [[ -z "$secret_key" ]]; then
+        log "⚠️ SECRET_KEY missing – generating a fresh 32-byte key"
+        secret_key=$(openssl rand -hex 32)
+    fi
+
+    if [[ -n "$twilio_phone" ]]; then
+        # normalize whitespace
+        twilio_phone=$(printf '%s' "$twilio_phone" | tr -d '[:space:]')
+        if ! [[ "$twilio_phone" =~ ^\+[0-9]{7,15}$ ]]; then
+            log "⚠️ TWILIO_PHONE has invalid format ('$twilio_phone'); will not write to hermes.env"
+            twilio_phone=""
+        fi
+    fi
 
     # ----------------------------------------------------------------------
     # 8️⃣ hermes.env Upsert
@@ -385,6 +407,19 @@ configure_and_launch() {
     upsert_env_entry "REDIS_PASSWORD" "$redis_pass" "$env_file"
     upsert_env_entry "OPENROUTER_MODEL" "$openrouter_model" "$env_file"
     upsert_env_entry "API_KEY" "$API_KEY" "$env_file"
+    if [[ -n "$secret_key" ]]; then
+        upsert_env_entry "SECRET_KEY" "$secret_key" "$env_file"
+    fi
+    if [[ -n "$twilio_auth_token" ]]; then
+        upsert_env_entry "TWILIO_AUTH_TOKEN" "$twilio_auth_token" "$env_file"
+    fi
+    if [[ -n "$twilio_phone" ]]; then
+        upsert_env_entry "TWILIO_PHONE" "$twilio_phone" "$env_file"
+    fi
+    if [[ -n "$google_client_id" ]]; then
+        upsert_env_entry "GOOGLE_CLIENT_ID" "$google_client_id" "$env_file"
+    fi
+
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
 
     # ----------------------------------------------------------------------
