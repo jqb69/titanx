@@ -24,6 +24,7 @@ create_requirements_and_dockerfile() {
 
     cat > "$WEB_DIR/requirements.txt" << 'EOF'
 streamlit
+requests
 redis
 PyPDF2
 pdfplumber
@@ -31,6 +32,11 @@ pymupdf
 Pillow
 pytesseract
 python-docx
+twilio
+google-auth
+pyotp
+qrcode
+python-jose
 EOF
 
     cat > "$WEB_DIR/Dockerfile" << 'DOCKERFILE'
