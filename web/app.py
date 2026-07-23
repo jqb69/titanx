@@ -8,11 +8,20 @@ try:
     import config
     import file_ui
     import files 
+    import login_ui
 except Exception as e:
     st.error(f"🚨 Critical module load error: {e}")
     st.stop()
 
 def main():
+    if "token" not in st.session_state:
+        login_ui.render_login_page()
+        st.stop()
+
+    st.sidebar.success(f"👤 {st.session_state.get('username', 'User')}")
+
+    # Logout button
+    login_ui.add_logout_button()
     ui.inject_global_styles()
     state.init_session()
     
