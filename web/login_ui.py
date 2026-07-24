@@ -23,7 +23,7 @@ def logout():
 
 
 def login_tab():
-    username = sanitize_input(st.text_input("Username"))
+    username = sanitize_input(st.text_input("Username / Email"))
     password = sanitize_input(st.text_input("Password", type="password"))
 
     if st.button("Login"):
@@ -162,3 +162,8 @@ def render_login_page():
     google_tab()
     register_tab()
     twofa_choice()
+
+def add_logout_button():
+    if "token" in st.session_state:
+        if st.button("🚪 Logout"):
+            logout()
