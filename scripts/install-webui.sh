@@ -34,6 +34,8 @@ pytesseract
 python-docx
 twilio
 google-auth
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.1
 pyotp
 qrcode
 python-jose
