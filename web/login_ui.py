@@ -154,24 +154,56 @@ def twofa_choice():
 
 def google_tab():
     st.write("### Sign in with Google")
-    if st.button("Continue with Google", use_container_width=True, type="primary"):
-        st.session_state.google_auth_flow = True
-        st.rerun()
+    st.markdown("Click the button below. Google will handle account selection.")
 
-    if st.session_state.get("google_auth_flow"):
-        st.subheader("Choose an account")
-        if st.button("Use current Google account"):
-            token, msg = auth.google_login("simulated_google_token")
-            if token:
-                st.session_state.token = token
-                st.success(msg)
-                st.switch_page("app.py")
-            else:
-                st.error(msg)
-        if st.button("Use another account"):
-            st.session_state.google_auth_flow = False
-            st.rerun()
+    # Real Google Identity Services button
+    google_client_id = getattr(config, "GOOGLE_CLIENT_ID", "")
+    if not google_client_id:
+        st.error("GOOGLE_CLIENT_ID is missing in config / hermes.env")
+        return
 
+    # Inject official Google Sign-In button
+    google_html = f"""
+    <div id="g_id_onload"
+         data-client_id="{google_client_id}"
+         data-callback="handleGoogleCredential"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="outline"
+         data-text="continue_with"
+         data-shape="rectangular"
+         data-logo_alignment="left">
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+    function handleGoogleCredential(response) {{
+        // Send the real ID token back to Streamlit
+        window.parent.postMessage({{
+            isStreamlitMessage: true,
+            type: "streamlit:setComponentValue",
+            value: response.credential
+        }}, "*");
+    }}
+    </script>
+    """
+
+    import streamlit.components.v1 as components
+    credential = components.html(google_html, height=60)
+
+    if credential:
+        # Real token received from Google
+        token, msg = auth.google_login(credential)
+        if token:
+            st.session_state.token = token
+            st.session_state.username = msg.split()[1] if "Welcome" in msg else "google_user"
+            st.success(msg)
+            st.switch_page("app.py")
+        else:
+            st.error(msg)
 
 def register_tab():
     new_user = sanitize_input(st.text_input("New Username"))
