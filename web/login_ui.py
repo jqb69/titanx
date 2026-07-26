@@ -3,6 +3,7 @@ import streamlit as st
 import requests
 import qrcode
 from io import BytesIO
+import config
 
 import auth
 
