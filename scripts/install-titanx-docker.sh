@@ -263,6 +263,8 @@ configure_and_launch() {
     local env_file="${DOCKER_DIR}/hermes.env"
     local git_log="${PROJECT_DIR}/git_operation.log"
     local age_key="${AGE_ID:-/home/$USER/.ssh/id_ed25519}"
+    local resend_api_key="" 
+    local email_from=""
 
     # ----------------------------------------------------------------------
     # 2️⃣ Dependency Assertions
@@ -342,6 +344,8 @@ configure_and_launch() {
             TWILIO_AUTH_TOKEN) twilio_auth_token="$val" ;;
             TWILIO_PHONE) twilio_phone="$val" ;;
             GOOGLE_CLIENT_ID) google_client_id="$val" ;;
+            RESEND_API_KEY) resend_api_key="$val" ;;       # ← ADD
+            EMAIL_FROM) email_from="$val" ;;               # ← ADD
         esac
     done <"$temp_env"
 
@@ -418,6 +422,14 @@ configure_and_launch() {
     fi
     if [[ -n "$google_client_id" ]]; then
         upsert_env_entry "GOOGLE_CLIENT_ID" "$google_client_id" "$env_file"
+    fi
+    
+    # Email (Resend)
+    if [[ -n "$resend_api_key" ]]; then
+        upsert_env_entry "RESEND_API_KEY" "$resend_api_key" "$env_file"
+    fi
+    if [[ -n "$email_from" ]]; then
+        upsert_env_entry "EMAIL_FROM" "$email_from" "$env_file"
     fi
 
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
