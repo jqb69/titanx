@@ -47,7 +47,7 @@ jobs:
           host: ${{ secrets.DIGITAL_OCEAN_IP }}
           username: root
           key: ${{ env.VALID_SSH_KEY }}
-          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY,TWILIO_SID,TWILIO_AUTH_TOKEN,TWILIO_PHONE,GOOGLE_CLIENT_ID,RESEND_API_KEY,FROM_EMAIL
+          envs: OPENROUTER_KEY,OPENROUTER_MODEL,G_USER,G_TOKEN,P_PRIVATE_KEY,TWILIO_SID,TWILIO_AUTH_TOKEN,TWILIO_PHONE,GOOGLE_CLIENT_ID,RESEND_API_KEY,EMAIL_FROM
           script_stop: true
           script: |
             set -euo pipefail
