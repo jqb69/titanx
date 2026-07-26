@@ -21,6 +21,49 @@ def logout():
             del st.session_state[key]
     st.switch_page("app.py")
 
+def forgot_password_section(prefill_email: str = ""):
+    """Reusable Forgot Password UI (used by both tab and after failed login)"""
+    st.write("### Forgot Password")
+    
+    email = sanitize_input(st.text_input(
+        "Your registered email",
+        value=prefill_email,
+        key=f"forgot_email_{prefill_email or 'tab'}"
+    ))
+
+    if st.button("Send Reset Code", key=f"send_code_{prefill_email or 'tab'}"):
+        success, msg = auth.send_password_reset_email(email)
+        if success:
+            st.success(msg)
+            st.session_state.reset_code_sent = True
+            st.session_state.reset_email = email
+        else:
+            st.error(msg)
+
+    if st.session_state.get("reset_code_sent"):
+        code = sanitize_input(st.text_input("Reset Code (6 digits)", max_chars=6))
+        new_pass = sanitize_input(st.text_input("New Password", type="password"))
+        confirm = sanitize_input(st.text_input("Confirm New Password", type="password"))
+
+        if st.button("Reset Password"):
+            if new_pass != confirm:
+                st.error("Passwords do not match")
+            else:
+                success, msg = auth.reset_password(
+                    st.session_state.get("reset_email", email),
+                    code,
+                    new_pass
+                )
+                if success:
+                    st.success(msg)
+                    st.session_state.reset_code_sent = False
+                    st.session_state.show_forgot = False
+                else:
+                    st.error(msg)
+                  
+def forgot_password_tab():
+    """Dedicated tab version – just calls the same modular function"""
+    forgot_password_section()
 
 def login_tab():
     username = sanitize_input(st.text_input("Username / Email"))
@@ -43,6 +86,13 @@ def login_tab():
             st.switch_page("app.py")
         else:
             st.error(msg)
+            st.session_state.show_forgot = True
+            st.session_state.forgot_email = username
+
+    # Show Forgot Password only after wrong password
+    if st.session_state.get("show_forgot"):
+        st.divider()
+        forgot_password_section(prefill_email=st.session_state.get("forgot_email", ""))
 
 
 def twofa_choice():
@@ -158,10 +208,17 @@ def render_login_page():
             logout()
         return
 
-    login_tab()
-    google_tab()
-    register_tab()
-    twofa_choice()
+    tab1, tab2, tab3, tab4 = st.tabs(["Login", "Google", "Register", "Forgot Password"])
+
+    with tab1:
+        login_tab()
+        twofa_choice()
+    with tab2:
+        google_tab()
+    with tab3:
+        register_tab()
+    with tab4:
+        forgot_password_tab()   # ← uses the same function
 
 def add_logout_button():
     if "token" in st.session_state:
