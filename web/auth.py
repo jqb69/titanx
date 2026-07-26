@@ -7,6 +7,7 @@ import jwt
 import redis
 import pyotp
 import config
+#import resend
 from twilio.rest import Client
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -352,3 +353,61 @@ def google_login(google_token: str) -> Tuple[Optional[str], str]:
         return None, f"Google token invalid: {e}"
     except Exception as e:
         return None, f"Google login failed: {e}"
+      
+def send_password_reset_email(email: str) -> tuple[bool, str]:
+    email = (email or "").strip().lower()
+    if not email:
+        return False, "Email required"
+
+    # Find user by email
+    found_key = None
+    for key in r.scan_iter("user:*"):
+        data = r.hgetall(key)
+        if data.get("email", "").lower() == email:
+            found_key = key
+            break
+
+    if not found_key:
+        return False, "Email not registered"
+
+    code = str(secrets.randbelow(900000) + 100000)
+    r.setex(f"reset:{email}", 900, code)  # 15 min
+
+    # Real email via Resend
+    if not config.RESEND_API_KEY:
+        return False, "RESEND_API_KEY missing in config"
+
+    try:
+        import resend
+        resend.api_key = config.RESEND_API_KEY
+
+        resend.Emails.send({
+            "from": config.EMAIL_FROM,
+            "to": [email],
+            "subject": "MIKIE Password Reset Code",
+            "html": f"""
+                <h2>MIKIE Password Reset</h2>
+                <p>Your verification code is:</p>
+                <h1 style="letter-spacing:4px;">{code}</h1>
+                <p>This code expires in 15 minutes.</p>
+            """
+        })
+        return True, "Reset code sent to your email"
+    except Exception as e:
+        return False, f"Failed to send email: {e}"
+
+def reset_password(email: str, code: str, new_password: str) -> tuple[bool, str]:
+    email = (email or "").strip().lower()
+    stored = r.get(f"reset:{email}")
+    if not stored or stored != code:
+        return False, "Invalid or expired reset code"
+
+    # Find and update user
+    for key in r.scan_iter("user:*"):
+        data = r.hgetall(key)
+        if data.get("email", "").lower() == email:
+            r.hset(key, "password", new_password)
+            r.delete(f"reset:{email}")
+            return True, "Password updated successfully"
+
+    return False, "User not found"
