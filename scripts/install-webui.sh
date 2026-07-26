@@ -39,6 +39,7 @@ google-auth-httplib2>=0.1
 pyotp
 qrcode
 python-jose
+resend
 EOF
 
     cat > "$WEB_DIR/Dockerfile" << 'DOCKERFILE'
