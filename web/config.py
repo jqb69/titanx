@@ -80,6 +80,9 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_PHONE = os.getenv("TWILIO_PHONE", "")
 # === Google ClientID (for google login) ===
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+# Email (Resend)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "MIKIE <onboarding@resend.dev>")
 
 # Fallback endpoints (retained for endpoint-probing resilience)
 ENDPOINTS = [
@@ -95,23 +98,6 @@ ENDPOINTS = [
 FILE_STORAGE_DIR = os.getenv("FILE_STORAGE_DIR", "/workspace/mikie_files")
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
 
-# Redis Keys (Memory-efficient)
-REDIS_FILE_INDEX = "mikie:files:index"           # SET of UIDs
-REDIS_FILE_META_PREFIX = "mikie:files:meta:"     # HASH per file
-REDIS_FILE_TEXT_PREFIX = "mikie:files:text:"     # STRING cache (1 week)
-# Comma-separated list, or None to allow all types (UI controls gating)
-_ALLOWED_RAW = os.getenv("ALLOWED_FILE_EXTENSIONS", "")
-ALLOWED_FILE_EXTENSIONS = None if not _ALLOWED_RAW else {e.strip().lower() for e in _ALLOWED_RAW.split(",")}
-
-CUSTOM_CSS = """
-<style>
- .stApp { background-color: #0a0a0a; color: #ffffff; }
- .stChatMessage { border-radius: 12px; padding: 14px; margin-bottom: 10px; }
- h1 { color: #ffffff; text-align: center; font-weight: 300; }
- .file-box { background-color: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px dashed #333; margin-bottom: 10px; }
- .error-box { color: #ff6b6b; }
-</style>
-"""
 # Redis Keys (Memory-efficient)
 REDIS_FILE_INDEX = "mikie:files:index"           # SET of UIDs
 REDIS_FILE_META_PREFIX = "mikie:files:meta:"     # HASH per file
