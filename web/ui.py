@@ -1,7 +1,7 @@
 # web/ui.py — Updated for multi-file vault support
 # Changes from original: import file_ui, call render_file_manager(),
 #                        render_attachment_bar(), get_attached_for_message(),
-#                        render_message_file_chips().
+#                        render_message_file_chips().add_logout_button()
 # All other functions remain IDENTICAL to preserve core functionality.
 
 import streamlit as st
@@ -17,10 +17,31 @@ from typing import Optional
 def inject_global_styles() -> None:
     st.markdown(config.CUSTOM_CSS, unsafe_allow_html=True)
 
-
+def logout():
+    for key in list(st.session_state.keys()):
+        if key not in ["_is_running", "_stcore"]:
+            del st.session_state[key]
+    st.switch_page("app.py")
+  
+def add_logout_button():
+    if "token" in st.session_state:
+        if st.button("🚪 Logout", use_container_width=True):
+            logout()
+  
 def render_header() -> None:
-    st.title("⚡ MIKIE")
-    st.caption("Modular Integrated Kinetic AI Engine — TitanX")
+    col1, col2 = st.columns([0.88, 0.12])
+    
+    with col1:
+        st.title("⚡ MIKIE")
+        st.caption("Modular Integrated Kinetic Intelligence Engine — TitanX")
+    
+    with col2:
+        # 3-dot menu (top right)
+        with st.popover("⋮"):
+            username = st.session_state.get("username", "User")
+            st.write(f"👤 **{username}**")
+            st.divider()
+            add_logout_button()
 
 
 def render_sidebar_controls() -> Optional[str]:
