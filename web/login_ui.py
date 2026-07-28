@@ -25,7 +25,7 @@ def logout():
 def forgot_password_section(prefill_email: str = ""):
     """Reusable Forgot Password UI (used by both tab and after failed login)"""
     st.write("### Forgot Password")
-    
+
     email = sanitize_input(st.text_input(
         "Your registered email",
         value=prefill_email,
@@ -42,9 +42,9 @@ def forgot_password_section(prefill_email: str = ""):
             st.error(msg)
 
     if st.session_state.get("reset_code_sent"):
-        code = sanitize_input(st.text_input("Reset Code (6 digits)", max_chars=6))
-        new_pass = sanitize_input(st.text_input("New Password", type="password"))
-        confirm = sanitize_input(st.text_input("Confirm New Password", type="password"))
+        code = sanitize_input(st.text_input("Reset Code (6 digits)", max_chars=6, key="forgot_reset_code"))
+        new_pass = sanitize_input(st.text_input("New Password", type="password", key="forgot_new_pass"))
+        confirm = sanitize_input(st.text_input("Confirm New Password", type="password", key="forgot_confirm_pass"))
 
         if st.button("Reset Password"):
             if new_pass != confirm:
@@ -61,14 +61,14 @@ def forgot_password_section(prefill_email: str = ""):
                     st.session_state.show_forgot = False
                 else:
                     st.error(msg)
-                  
+
 def forgot_password_tab():
     """Dedicated tab version – just calls the same modular function"""
     forgot_password_section()
 
 def login_tab():
-    username = sanitize_input(st.text_input("Username / Email"))
-    password = sanitize_input(st.text_input("Password", type="password"))
+    username = sanitize_input(st.text_input("Username / Email", key="login_username"))
+    password = sanitize_input(st.text_input("Password", type="password", key="login_password"))
 
     if st.button("Login"):
         ip = get_client_ip()
@@ -95,7 +95,6 @@ def login_tab():
         st.divider()
         forgot_password_section(prefill_email=st.session_state.get("forgot_email", ""))
 
-
 def twofa_choice():
     if st.session_state.get("twofa_stage") != "required":
         return
@@ -105,7 +104,7 @@ def twofa_choice():
 
     col1, col2 = st.columns(2)
     with col1:
-        totp = st.text_input("Google Authenticator Code", max_chars=6)
+        totp = st.text_input("Google Authenticator Code", max_chars=6, key="totp_code")
         if st.button("Verify with Google Authenticator"):
             if not totp.strip():
                 st.error("Enter your Google Authenticator code.")
@@ -130,7 +129,7 @@ def twofa_choice():
             if st.button(f"Send OTP to {phone}"):
                 auth.send_otp(phone)
                 st.success("OTP sent")
-            phone_otp = st.text_input("Phone OTP", max_chars=6)
+            phone_otp = st.text_input("Phone OTP", max_chars=6, key="phone_otp_code")
             if st.button("Verify Phone OTP"):
                 if not phone_otp.strip():
                     st.error("Enter the phone OTP.")
@@ -152,18 +151,15 @@ def twofa_choice():
         else:
             st.error("No phone number registered.")
 
-
 def google_tab():
     st.write("### Sign in with Google")
     st.markdown("Click the button below. Google will handle account selection.")
 
-    # Real Google Identity Services button
     google_client_id = getattr(config, "GOOGLE_CLIENT_ID", "")
     if not google_client_id:
         st.error("GOOGLE_CLIENT_ID is missing in config / hermes.env")
         return
 
-    # Inject official Google Sign-In button
     google_html = f"""
     <div id="g_id_onload"
          data-client_id="{google_client_id}"
@@ -182,7 +178,6 @@ def google_tab():
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
     function handleGoogleCredential(response) {{
-        // Send the real ID token back to Streamlit
         window.parent.postMessage({{
             isStreamlitMessage: true,
             type: "streamlit:setComponentValue",
@@ -196,7 +191,6 @@ def google_tab():
     credential = components.html(google_html, height=60)
 
     if credential:
-        # Real token received from Google
         token, msg = auth.google_login(credential)
         if token:
             st.session_state.token = token
@@ -207,11 +201,11 @@ def google_tab():
             st.error(msg)
 
 def register_tab():
-    new_user = sanitize_input(st.text_input("New Username"))
-    new_pass = sanitize_input(st.text_input("New Password", type="password"))
-    confirm_pass = sanitize_input(st.text_input("Confirm Password", type="password"))
-    email = sanitize_input(st.text_input("Email"))
-    phone = sanitize_input(st.text_input("Phone (optional)"))
+    new_user = sanitize_input(st.text_input("New Username", key="register_username"))
+    new_pass = sanitize_input(st.text_input("New Password", type="password", key="register_password"))
+    confirm_pass = sanitize_input(st.text_input("Confirm Password", type="password", key="register_confirm"))
+    email = sanitize_input(st.text_input("Email", key="register_email"))
+    phone = sanitize_input(st.text_input("Phone (optional)", key="register_phone"))
 
     if new_pass and confirm_pass and new_pass != confirm_pass:
         st.error("Passwords do not match")
@@ -232,7 +226,6 @@ def register_tab():
             else:
                 st.error(secret)
 
-
 def render_login_page():
     st.title("🔐 MIKIE Secure Login")
 
@@ -251,7 +244,7 @@ def render_login_page():
     with tab3:
         register_tab()
     with tab4:
-        forgot_password_tab()   # ← uses the same function
+        forgot_password_tab()
 
 def add_logout_button():
     if "token" in st.session_state:
