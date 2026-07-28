@@ -411,3 +411,25 @@ def reset_password(email: str, code: str, new_password: str) -> tuple[bool, str]
             return True, "Password updated successfully"
 
     return False, "User not found"
+  
+def get_user_settings(username: str) -> dict:
+    """Return user hash from Redis"""
+    user_key = f"user:{(username or '').strip().lower()}"
+    return r.hgetall(user_key) or {}
+
+
+def save_user_settings(username: str, updates: dict) -> tuple[bool, str]:
+    """Update only the provided fields"""
+    user_key = f"user:{(username or '').strip().lower()}"
+    if not r.exists(user_key):
+        return False, "User not found"
+
+    # Optional: normalize phone
+    if "phone" in updates and updates["phone"]:
+        try:
+            updates["phone"] = _normalize_phone(updates["phone"])
+        except ValueError as e:
+            return False, str(e)
+
+    r.hset(user_key, mapping=updates)
+    return True, "Saved"
