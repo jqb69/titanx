@@ -17,11 +17,18 @@ def main():
     if "token" not in st.session_state:
         login_ui.render_login_page()
         st.stop()
-
-    st.sidebar.success(f"👤 {st.session_state.get('username', 'User')}")
+    # Simple page switch
+    if st.session_state.get("page") == "account":
+        import account
+        account.account_page()
+        if st.button("← Back to Chat"):
+            st.session_state.page = "chat"
+            st.rerun()
+        return
+    #st.sidebar.success(f"👤 {st.session_state.get('username', 'User')}")
 
     # Logout button
-    login_ui.add_logout_button()
+    #login_ui.add_logout_button()
     ui.inject_global_styles()
     state.init_session()
     
