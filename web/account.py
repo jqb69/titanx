@@ -56,6 +56,6 @@ def account_page():
             else:
                 st.info("No changes made")
 
-    if st.button("← Back to Chat"):
+    if st.button("← Back to Chat", key="back_to_chat"):
         st.session_state.page = "chat"
         st.rerun()
