@@ -40,6 +40,10 @@ def render_header() -> None:
         with st.popover("⋮"):
             username = st.session_state.get("username", "User")
             st.write(f"👤 **{username}**")
+            st.markdown("---")
+            if st.button("Account ", use_container_width=True):
+                st.session_state.page = "account"
+                st.rerun()
             st.divider()
             add_logout_button()
 
