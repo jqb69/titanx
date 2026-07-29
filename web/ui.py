@@ -54,8 +54,10 @@ def render_sidebar_controls() -> Optional[str]:
         with col1:
             if st.button("Account", use_container_width=True):
                 st.session_state.page = "account"
+                st.rerun()
         with col2:
-            add_logout_button()
+            if st.button("Logout", use_container_width=True):
+                logout()
 
         st.markdown("---")
 
