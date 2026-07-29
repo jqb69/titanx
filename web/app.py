@@ -21,9 +21,6 @@ def main():
     if st.session_state.get("page") == "account":
         import account
         account.account_page()
-        if st.button("← Back to Chat"):
-            st.session_state.page = "chat"
-            st.rerun()
         return
     #st.sidebar.success(f"👤 {st.session_state.get('username', 'User')}")
 
