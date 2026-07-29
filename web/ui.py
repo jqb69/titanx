@@ -1,7 +1,7 @@
 # web/ui.py — Updated for multi-file vault support
 # Changes from original: import file_ui, call render_file_manager(),
 #                        render_attachment_bar(), get_attached_for_message(),
-#                        render_message_file_chips().add_logout_button()
+#                        render_message_file_chips(),add_logout_button()
 # All other functions remain IDENTICAL to preserve core functionality.
 
 import streamlit as st
@@ -46,6 +46,20 @@ def render_header() -> None:
 
 def render_sidebar_controls() -> Optional[str]:
     with st.sidebar:
+        # === USER SECTION ===
+        username = st.session_state.get("username", "User")
+        st.markdown(f"### 👤 {username}")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Account", use_container_width=True):
+                st.session_state.page = "account"
+        with col2:
+            add_logout_button()
+
+        st.markdown("---")
+
+        # === SYSTEM STATUS ===
         st.header("⚙️ System Status")
         if not client.check_hermes_health():
             st.error("⚠️ Hermes Endpoint: Offline")
@@ -54,10 +68,9 @@ def render_sidebar_controls() -> Optional[str]:
 
         st.markdown("---")
 
-        # REPLACED: single-file uploader → full file vault manager
+        # File Vault
         file_ui.render_file_manager()
 
-    # Return file context from attached files ( NEW: multi-file context )
     return file_ui.get_attached_for_message()
 
 
