@@ -17,47 +17,44 @@ def sanitize_input(text: str) -> str:
     return str(text).strip()[:100] if text else ""
 
 def logout():
-    """Reliable logout with confirmation + 30s timeout"""
+    """Reliable two-phase logout with 30s timeout"""
     import time
 
     # Already logged out
     if "token" not in st.session_state:
         return
 
-    # Phase 1: start confirmation
-    if not st.session_state.get("logout_confirm_started"):
-        st.session_state.logout_confirm_started = time.time()
+    # ========== PHASE 2: Actually log out ==========
+    if st.session_state.get("do_logout") is True:
+        # Clear everything except Streamlit internals
+        for key in list(st.session_state.keys()):
+            if not key.startswith("_"):
+                del st.session_state[key]
         st.rerun()
 
-    started = st.session_state.logout_confirm_started
-    if not isinstance(started, (int, float)):
-        # safety reset
-        st.session_state.logout_confirm_started = time.time()
-        st.rerun()
+    # ========== PHASE 1: Show confirmation ==========
+    if "logout_started_at" not in st.session_state:
+        st.session_state.logout_started_at = time.time()
 
-    elapsed = time.time() - started
+    elapsed = time.time() - st.session_state.logout_started_at
     remaining = max(0, 30 - int(elapsed))
 
     st.warning(f"⚠️ Are you sure you want to logout? ({remaining}s)")
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Yes, Logout", type="primary", key="yes_logout"):
-            for key in list(st.session_state.keys()):
-                if key not in ["_is_running", "_stcore"]:
-                    del st.session_state[key]
+        if st.button("Yes, Logout", type="primary", key="logout_yes"):
+            st.session_state.do_logout = True
             st.rerun()
-
     with col2:
-        if st.button("Cancel", key="cancel_logout"):
-            st.session_state.pop("logout_confirm_started", None)
+        if st.button("Cancel", key="logout_cancel"):
+            st.session_state.pop("logout_started_at", None)
+            st.session_state.pop("do_logout", None)
             st.rerun()
 
-    # Auto logout
+    # Auto-confirm after 30 seconds
     if remaining <= 0:
-        for key in list(st.session_state.keys()):
-            if key not in ["_is_running", "_stcore"]:
-                del st.session_state[key]
+        st.session_state.do_logout = True
         st.rerun()
 
 def forgot_password_section(prefill_email: str = ""):
