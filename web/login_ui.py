@@ -17,11 +17,15 @@ def sanitize_input(text: str) -> str:
     return str(text).strip()[:100] if text else ""
 
 def logout():
-    """Confirmation + 30s timeout, then clear session and rerun"""
+    """Reliable logout with confirmation + 30s timeout"""
     import time
 
-    # First click → start confirmation
-    if not st.session_state.get("logout_confirm_started"):
+    # Already logged out → do nothing
+    if "token" not in st.session_state:
+        return
+
+    # Phase 1: Start confirmation
+    if "logout_confirm_started" not in st.session_state:
         st.session_state.logout_confirm_started = time.time()
         st.rerun()
 
@@ -32,21 +36,23 @@ def logout():
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Yes, Logout", type="primary", key="confirm_logout_yes"):
-            # Clear session
-            for key in list(st.session_state.keys()):
+        if st.button("Yes, Logout", type="primary", key="yes_logout"):
+            # Nuclear clear
+            keys_to_delete = list(st.session_state.keys())
+            for key in keys_to_delete:
                 if key not in ["_is_running", "_stcore"]:
                     del st.session_state[key]
-            st.rerun()          # ← more reliable than switch_page
+            st.rerun()
 
     with col2:
-        if st.button("Cancel", key="confirm_logout_cancel"):
+        if st.button("Cancel", key="cancel_logout"):
             st.session_state.pop("logout_confirm_started", None)
             st.rerun()
 
-    # Auto-logout after 30 seconds
+    # Auto logout
     if remaining <= 0:
-        for key in list(st.session_state.keys()):
+        keys_to_delete = list(st.session_state.keys())
+        for key in keys_to_delete:
             if key not in ["_is_running", "_stcore"]:
                 del st.session_state[key]
         st.rerun()
