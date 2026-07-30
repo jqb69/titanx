@@ -14,6 +14,13 @@ except Exception as e:
     st.stop()
 
 def main():
+
+    if "logout_confirm_started" not in st.session_state:
+        st.session_state.logout_confirm_started = None
+      
+    if login_ui.handle_idle_timeout():
+        return
+  
     if "token" not in st.session_state:
         login_ui.render_login_page()
         st.stop()
