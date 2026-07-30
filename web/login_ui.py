@@ -16,11 +16,38 @@ def get_client_ip():
 def sanitize_input(text: str) -> str:
     return str(text).strip()[:100] if text else ""
 
+# web/login_ui.py
 def logout():
-    for key in list(st.session_state.keys()):
-        if key not in ["_is_running", "_stcore"]:
-            del st.session_state[key]
-    st.switch_page("app.py")
+    """Confirmation + 30s timeout, then clear session"""
+    import time
+
+    if not st.session_state.get("logout_confirm_started"):
+        st.session_state.logout_confirm_started = time.time()
+        st.rerun()
+
+    elapsed = time.time() - st.session_state.logout_confirm_started
+    remaining = max(0, 30 - int(elapsed))
+
+    st.warning(f"⚠️ Are you sure you want to logout? ({remaining}s)")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Yes, Logout", type="primary"):
+            # Clear everything
+            for key in list(st.session_state.keys()):
+                if key not in ["_is_running", "_stcore"]:
+                    del st.session_state[key]
+            st.switch_page("app.py")
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.pop("logout_confirm_started", None)
+            st.rerun()
+
+    if remaining <= 0:
+        for key in list(st.session_state.keys()):
+            if key not in ["_is_running", "_stcore"]:
+                del st.session_state[key]
+        st.switch_page("app.py")
 
 def forgot_password_section(prefill_email: str = ""):
     """Reusable Forgot Password UI (used by both tab and after failed login)"""
@@ -250,3 +277,32 @@ def add_logout_button():
     if "token" in st.session_state:
         if st.button("🚪 Logout"):
             logout()
+
+def handle_idle_timeout() -> bool:
+    """
+    Returns True if main UI should stop (logged out or showing prompt).
+    """
+    from session import check_idle_timeout, update_last_activity
+
+    status = check_idle_timeout()
+
+    if status == "logout":
+        logout()
+        return True
+
+    if status == "prompt":
+        st.warning("⏰ You have been idle for a long time.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Stay Logged In", type="primary"):
+                update_last_activity()
+                st.session_state.pop("idle_prompt_started", None)
+                st.rerun()
+        with col2:
+            if st.button("Logout Now"):
+                logout()
+        st.info("Auto-logout in 60 seconds if no response…")
+        return True
+
+    update_last_activity()
+    return False
