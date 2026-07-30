@@ -20,16 +20,22 @@ def logout():
     """Reliable logout with confirmation + 30s timeout"""
     import time
 
-    # Already logged out → do nothing
+    # Already logged out
     if "token" not in st.session_state:
         return
 
-    # Phase 1: Start confirmation
-    if "logout_confirm_started" not in st.session_state:
+    # Phase 1: start confirmation
+    if not st.session_state.get("logout_confirm_started"):
         st.session_state.logout_confirm_started = time.time()
         st.rerun()
 
-    elapsed = time.time() - st.session_state.logout_confirm_started
+    started = st.session_state.logout_confirm_started
+    if not isinstance(started, (int, float)):
+        # safety reset
+        st.session_state.logout_confirm_started = time.time()
+        st.rerun()
+
+    elapsed = time.time() - started
     remaining = max(0, 30 - int(elapsed))
 
     st.warning(f"⚠️ Are you sure you want to logout? ({remaining}s)")
@@ -37,9 +43,7 @@ def logout():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Yes, Logout", type="primary", key="yes_logout"):
-            # Nuclear clear
-            keys_to_delete = list(st.session_state.keys())
-            for key in keys_to_delete:
+            for key in list(st.session_state.keys()):
                 if key not in ["_is_running", "_stcore"]:
                     del st.session_state[key]
             st.rerun()
@@ -51,8 +55,7 @@ def logout():
 
     # Auto logout
     if remaining <= 0:
-        keys_to_delete = list(st.session_state.keys())
-        for key in keys_to_delete:
+        for key in list(st.session_state.keys()):
             if key not in ["_is_running", "_stcore"]:
                 del st.session_state[key]
         st.rerun()
