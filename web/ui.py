@@ -18,10 +18,8 @@ def inject_global_styles() -> None:
     st.markdown(config.CUSTOM_CSS, unsafe_allow_html=True)
 
 def logout():
-    for key in list(st.session_state.keys()):
-        if key not in ["_is_running", "_stcore"]:
-            del st.session_state[key]
-    st.switch_page("app.py")
+    import login_ui
+    login_ui.logout()
   
 def add_logout_button():
     if "token" in st.session_state:
