@@ -16,11 +16,11 @@ def get_client_ip():
 def sanitize_input(text: str) -> str:
     return str(text).strip()[:100] if text else ""
 
-# web/login_ui.py
 def logout():
-    """Confirmation + 30s timeout, then clear session"""
+    """Confirmation + 30s timeout, then clear session and rerun"""
     import time
 
+    # First click → start confirmation
     if not st.session_state.get("logout_confirm_started"):
         st.session_state.logout_confirm_started = time.time()
         st.rerun()
@@ -32,22 +32,24 @@ def logout():
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Yes, Logout", type="primary"):
-            # Clear everything
+        if st.button("Yes, Logout", type="primary", key="confirm_logout_yes"):
+            # Clear session
             for key in list(st.session_state.keys()):
                 if key not in ["_is_running", "_stcore"]:
                     del st.session_state[key]
-            st.switch_page("app.py")
+            st.rerun()          # ← more reliable than switch_page
+
     with col2:
-        if st.button("Cancel"):
+        if st.button("Cancel", key="confirm_logout_cancel"):
             st.session_state.pop("logout_confirm_started", None)
             st.rerun()
 
+    # Auto-logout after 30 seconds
     if remaining <= 0:
         for key in list(st.session_state.keys()):
             if key not in ["_is_running", "_stcore"]:
                 del st.session_state[key]
-        st.switch_page("app.py")
+        st.rerun()
 
 def forgot_password_section(prefill_email: str = ""):
     """Reusable Forgot Password UI (used by both tab and after failed login)"""
