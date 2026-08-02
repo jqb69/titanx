@@ -4,7 +4,8 @@ import requests
 import qrcode
 from io import BytesIO
 import config
-
+# Optional: set activity timestamp
+import time
 import auth
 
 def get_client_ip():
@@ -15,24 +16,38 @@ def get_client_ip():
 
 def sanitize_input(text: str) -> str:
     return str(text).strip()[:100] if text else ""
+  
+def initialize_login_state(username: str, token: str):
+    """
+    Call this after every successful login.
+    Sets the session and cleans logout-related flags.
+    """
+    st.session_state.token = token
+    st.session_state.username = username
+
+    # Clean any leftover logout flags
+    st.session_state.pop("logout_started_at", None)
+    st.session_state.pop("do_logout", None)
+    st.session_state.pop("logout_confirm_started", None)
+    st.session_state.pop("idle_prompt_started", None)
+   
+    st.session_state.last_activity = time.time()
 
 def logout():
-    """Reliable two-phase logout with 30s timeout"""
-    import time
+    """Two-phase logout with 30s timeout"""
+    #import time
 
-    # Already logged out
     if "token" not in st.session_state:
         return
 
-    # ========== PHASE 2: Actually log out ==========
+    # Phase 2 — actually log out
     if st.session_state.get("do_logout") is True:
-        # Clear everything except Streamlit internals
         for key in list(st.session_state.keys()):
             if not key.startswith("_"):
                 del st.session_state[key]
         st.rerun()
 
-    # ========== PHASE 1: Show confirmation ==========
+    # Phase 1 — show confirmation
     if "logout_started_at" not in st.session_state:
         st.session_state.logout_started_at = time.time()
 
@@ -52,7 +67,6 @@ def logout():
             st.session_state.pop("do_logout", None)
             st.rerun()
 
-    # Auto-confirm after 30 seconds
     if remaining <= 0:
         st.session_state.do_logout = True
         st.rerun()
@@ -119,6 +133,7 @@ def login_tab():
         elif result and result not in (None, "2FA_REQUIRED"):
             st.session_state.token = result
             st.session_state.username = username
+            nitialize_login_state(username, result)
             st.switch_page("app.py")
         else:
             st.error(msg)
@@ -155,6 +170,7 @@ def twofa_choice():
                     st.session_state.username = st.session_state.pending_username
                     for key in ["twofa_stage", "pending_username", "pending_password", "pending_ip"]:
                         st.session_state.pop(key, None)
+                    initialize_login_state(st.session_state.pending_username, result)
                     st.switch_page("app.py")
                 else:
                     st.error(msg)
@@ -180,6 +196,7 @@ def twofa_choice():
                         st.session_state.username = st.session_state.pending_username
                         for key in ["twofa_stage", "pending_username", "pending_password", "pending_ip"]:
                             st.session_state.pop(key, None)
+                        initialize_login_state(st.session_state.pending_username, result)
                         st.switch_page("app.py")
                     else:
                         st.error(msg)
