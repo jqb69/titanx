@@ -229,13 +229,13 @@ def google_tab():
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
-    function handleGoogleCredential(response) {
-        window.parent.postMessage({
+    function handleGoogleCredential(response) {{
+        window.parent.postMessage({{
             isStreamlitMessage: true,
             type: "streamlit:setComponentValue",
             value: response.credential
-        }, "*");
-    }
+        }}, "*");
+    }}
     </script>
     """.format(client_id=google_client_id)
 
@@ -245,16 +245,15 @@ def google_tab():
     if credential:
         token, msg = auth.google_login(credential)
         if token:
-            st.session_state.token = token
             username = (msg.split()[1] if "Welcome" in msg else "google_user")
-            username = str(username)  # <-- ensure it's a string
+            username = str(username)
+            st.session_state.token = token
             st.session_state.username = username
             initialize_login_state(username, token)
             st.success(msg)
             st.switch_page("app.py")
         else:
             st.error(msg)
-
 
 
 def register_tab():
