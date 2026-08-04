@@ -58,7 +58,7 @@ def logout():
         st.session_state.logout_started_at = time.time()
 
     elapsed = time.time() - st.session_state.logout_started_at
-    remaining = max(0, 30 - int(elapsed))
+    remaining = max(0, 3 - int(elapsed))
 
     st.warning(f"⚠️ Are you sure you want to logout? ({remaining}s)")
 
