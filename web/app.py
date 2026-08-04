@@ -14,7 +14,13 @@ except Exception as e:
     st.stop()
 
 def main():
-      
+     
+    if st.session_state.get("do_logout") is True:
+        for key in list(st.session_state.keys()):
+            if not key.startswith("_"):
+                del st.session_state[key]
+        st.rerun()
+        
     if login_ui.handle_idle_timeout():
         return
   
