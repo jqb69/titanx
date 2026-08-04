@@ -320,8 +320,11 @@ def get_totp_uri(username: str):
     return None
 
 
-def google_login(google_token: str) -> Tuple[Optional[str], str]:
+def google_login(google_token: str) -> tuple[str | None, str]:
     try:
+        if not google_token or str(google_token).count(".") < 2:
+            return None, "Invalid Google token format"
+
         if not config.GOOGLE_CLIENT_ID:
             return None, "Missing GOOGLE_CLIENT_ID"
 
@@ -333,7 +336,7 @@ def google_login(google_token: str) -> Tuple[Optional[str], str]:
 
         email = idinfo.get("email")
         if not email:
-            return None, "Invalid Google token"
+            return None, "Invalid Google token (no email)"
 
         username = email.split("@")[0].strip()
         user_key = f"user:{username.lower()}"
@@ -350,7 +353,7 @@ def google_login(google_token: str) -> Tuple[Optional[str], str]:
         token = create_access_token(username)
         return token, f"Welcome {username} (Google)"
     except ValueError as e:
-        return None, f"Google token invalid: {e}"
+        return None, f"Google token invalid: {e}" 
     except Exception as e:
         return None, f"Google login failed: {e}"
       
