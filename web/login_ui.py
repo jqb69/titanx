@@ -7,6 +7,8 @@ import config
 # Optional: set activity timestamp
 import time
 import auth
+import json
+import re
 
 def get_client_ip():
     try:
@@ -19,18 +21,22 @@ def sanitize_input(text: str) -> str:
   
 def initialize_login_state(username: str, token: str):
     """
-    Call this after every successful login.
-    Sets the session and cleans logout-related flags.
+    Call after every successful login.
+    Cleans old flags and sets a clean session.
     """
+    # Clear logout / idle related flags
+    for key in [
+        "logout_started_at", "do_logout", "logout_confirm_started",
+        "idle_prompt_started", "twofa_stage", "pending_username",
+        "pending_password", "pending_ip", "show_forgot", "page"
+    ]:
+        st.session_state.pop(key, None)
+
+    # Set the real login state (matches existing app.py checks)
     st.session_state.token = token
     st.session_state.username = username
 
-    # Clean any leftover logout flags
-    st.session_state.pop("logout_started_at", None)
-    st.session_state.pop("do_logout", None)
-    st.session_state.pop("logout_confirm_started", None)
-    st.session_state.pop("idle_prompt_started", None)
-   
+    # Activity timestamp for idle timeout
     st.session_state.last_activity = time.time()
 
 def logout():
@@ -212,10 +218,11 @@ def google_tab():
         st.error("GOOGLE_CLIENT_ID is missing in config / hermes.env")
         return
 
-    google_html = """
+    # Google Identity Services button + redirect back with credential
+    google_script = f"""
     <div id="g_id_onload"
-         data-client_id="{client_id}"
-         data-callback="handleGoogleCredential"
+         data-client_id="{google_client_id}"
+         data-callback="onGoogleCredentialResponse"
          data-auto_prompt="false">
     </div>
     <div class="g_id_signin"
@@ -229,43 +236,44 @@ def google_tab():
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
-    function handleGoogleCredential(response) {{
-        window.parent.postMessage({{
-            isStreamlitMessage: true,
-            type: "streamlit:setComponentValue",
-            value: response.credential
-        }}, "*");
+    function onGoogleCredentialResponse(response) {{
+        const cred = response.credential;
+        const currentUrl = window.location.href.split('?')[0].split('#')[0];
+        window.location.href = currentUrl + '?google_cred=' + encodeURIComponent(cred);
     }}
     </script>
-    """.format(client_id=google_client_id)
+    """
+    st.markdown(google_script, unsafe_allow_html=True)
 
-    import streamlit.components.v1 as components
-    credential = components.html(google_html, height=90)
+    # ---- Handle returned credential ----
+    google_cred = st.query_params.get("google_cred")
 
-    if credential is None:
-        st.error("No credential returned from the component.")
-        return
+    if google_cred:
+        # Clear the param immediately so it is not re-processed
+        st.query_params.clear()
 
-    st.write("credential type:", type(credential))
-    s = credential if isinstance(credential, str) else str(credential)
-    st.write("credential preview:", s[:120])
+        # In some Streamlit versions it can be a list
+        if isinstance(google_cred, list):
+            google_cred = google_cred[0] if google_cred else None
 
-    # If it's really a Google ID token (JWT), it has 2 dots (header.payload.signature)
-    if s.count(".") < 2:
-        st.error("Received non-JWT data from component. This means your postMessage isn't being returned to Python.")
-        return
+        if not google_cred or str(google_cred).count(".") < 2:
+            st.error("Received invalid Google credential.")
+            return
 
-    token, msg = auth.google_login(s)
-    if token:
-        username = (msg.split()[1] if "Welcome" in msg else "google_user")
-        username = str(username)
-        st.session_state.token = token
-        st.session_state.username = username
-        initialize_login_state(username, token)
-        st.success(msg)
-        st.switch_page("app.py")
-    else:
-        st.error(msg)
+        token, msg = auth.google_login(str(google_cred))
+        if token:
+            # Extract username cleanly
+            username = "google_user"
+            if "Welcome" in msg:
+                parts = msg.replace("(", "").replace(")", "").split()
+                if len(parts) >= 2:
+                    username = parts[1]
+
+            initialize_login_state(username, token)
+            st.success(msg)
+            st.rerun()          # more reliable than switch_page here
+        else:
+            st.error(msg)
 
 def register_tab():
     new_user = sanitize_input(st.text_input("New Username", key="register_username"))
