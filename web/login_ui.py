@@ -218,51 +218,57 @@ def google_tab():
         st.error("GOOGLE_CLIENT_ID is missing in config / hermes.env")
         return
 
-    # Google Identity Services button + redirect back with credential
-    google_script = f"""
-    <div id="g_id_onload"
-         data-client_id="{google_client_id}"
-         data-callback="onGoogleCredentialResponse"
-         data-auto_prompt="false">
-    </div>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-size="large"
-         data-theme="outline"
-         data-text="continue_with"
-         data-shape="rectangular"
-         data-logo_alignment="left">
-    </div>
+    import streamlit.components.v1 as components
 
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script>
-    function onGoogleCredentialResponse(response) {{
-        const cred = response.credential;
-        const currentUrl = window.location.href.split('?')[0].split('#')[0];
-        window.location.href = currentUrl + '?google_cred=' + encodeURIComponent(cred);
-    }}
-    </script>
+    google_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
+    </head>
+    <body style="margin:0; padding:10px; background:transparent;">
+        <div id="g_id_onload"
+             data-client_id="{google_client_id}"
+             data-callback="onGoogleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="continue_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
+
+        <script>
+        function onGoogleCredentialResponse(response) {{
+            const cred = response.credential;
+            const currentUrl = window.location.href.split('?')[0].split('#')[0];
+            window.top.location.href = currentUrl + '?google_cred=' + encodeURIComponent(cred);
+        }}
+        </script>
+    </body>
+    </html>
     """
-    st.markdown(google_script, unsafe_allow_html=True)
+    
+    components.html(google_html, height=70)
 
-    # ---- Handle returned credential ----
+    # Handle the returned credential
     google_cred = st.query_params.get("google_cred")
-
     if google_cred:
-        # Clear the param immediately so it is not re-processed
         st.query_params.clear()
 
-        # In some Streamlit versions it can be a list
         if isinstance(google_cred, list):
             google_cred = google_cred[0] if google_cred else None
 
         if not google_cred or str(google_cred).count(".") < 2:
-            st.error("Received invalid Google credential.")
+            st.error("Invalid Google credential received.")
             return
 
         token, msg = auth.google_login(str(google_cred))
         if token:
-            # Extract username cleanly
             username = "google_user"
             if "Welcome" in msg:
                 parts = msg.replace("(", "").replace(")", "").split()
@@ -271,7 +277,7 @@ def google_tab():
 
             initialize_login_state(username, token)
             st.success(msg)
-            st.rerun()          # more reliable than switch_page here
+            st.rerun()
         else:
             st.error(msg)
 
