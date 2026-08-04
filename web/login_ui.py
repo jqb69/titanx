@@ -242,19 +242,30 @@ def google_tab():
     import streamlit.components.v1 as components
     credential = components.html(google_html, height=90)
 
-    if credential:
-        token, msg = auth.google_login(credential)
-        if token:
-            username = (msg.split()[1] if "Welcome" in msg else "google_user")
-            username = str(username)
-            st.session_state.token = token
-            st.session_state.username = username
-            initialize_login_state(username, token)
-            st.success(msg)
-            st.switch_page("app.py")
-        else:
-            st.error(msg)
+    if credential is None:
+        st.error("No credential returned from the component.")
+        return
 
+    st.write("credential type:", type(credential))
+    s = credential if isinstance(credential, str) else str(credential)
+    st.write("credential preview:", s[:120])
+
+    # If it's really a Google ID token (JWT), it has 2 dots (header.payload.signature)
+    if s.count(".") < 2:
+        st.error("Received non-JWT data from component. This means your postMessage isn't being returned to Python.")
+        return
+
+    token, msg = auth.google_login(s)
+    if token:
+        username = (msg.split()[1] if "Welcome" in msg else "google_user")
+        username = str(username)
+        st.session_state.token = token
+        st.session_state.username = username
+        initialize_login_state(username, token)
+        st.success(msg)
+        st.switch_page("app.py")
+    else:
+        st.error(msg)
 
 def register_tab():
     new_user = sanitize_input(st.text_input("New Username", key="register_username"))
