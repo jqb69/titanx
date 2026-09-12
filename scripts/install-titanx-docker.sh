@@ -264,6 +264,7 @@ configure_and_launch() {
     local git_log="${PROJECT_DIR}/git_operation.log"
     local age_key="${AGE_ID:-/home/$USER/.ssh/id_ed25519}"
     local resend_api_key="" 
+    local do_api_token=""
     local email_from=""
 
     # ----------------------------------------------------------------------
@@ -346,6 +347,7 @@ configure_and_launch() {
             GOOGLE_CLIENT_ID) google_client_id="$val" ;;
             RESEND_API_KEY) resend_api_key="$val" ;;       # ← ADD
             EMAIL_FROM) email_from="$val" ;;               # ← ADD
+            DO_API_TOKEN) do_api_token="$val" ;;
         esac
     done <"$temp_env"
 
@@ -430,6 +432,10 @@ configure_and_launch() {
     fi
     if [[ -n "$email_from" ]]; then
         upsert_env_entry "EMAIL_FROM" "$email_from" "$env_file"
+    fi
+    #do _api
+    if [[ -n "$do_api_token" ]]; then
+        upsert_env_entry "DO_API_TOKEN" "$do_api_token" "$env_file"
     fi
 
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
