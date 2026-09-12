@@ -19,7 +19,8 @@ generate_file() {
         "PROJECT_PRIVATE_KEY"
         "TWILIO_SID" "TWILIO_AUTH_TOKEN" "TWILIO_PHONE"
         "GOOGLE_CLIENT_ID"
-        "RESEND_API_KEY" "EMAIL_FROM"          
+        "RESEND_API_KEY" "EMAIL_FROM"   
+        "DO_API_TOKEN"       
     )
 
     [[ -z "${OPENROUTER_KEY:-}" ]] && error "OPENROUTER_KEY missing"
@@ -33,6 +34,7 @@ generate_file() {
     [[ -z "${GOOGLE_CLIENT_ID:-}" ]] && error "GOOGLE_CLIENT_ID missing"
     [[ -z "${RESEND_API_KEY:-}" ]] && error "RESEND_API_KEY missing"
     [[ -z "${EMAIL_FROM:-}" ]] && error "EMAIL_FROM missing"
+    [[ -z "${DO_API_TOKEN:-}" ]] && error "DO_API_TOKEN missing"
 
     # 2) Write secrets.txt with proper mapping
     log "Writing mapped variables to secrets.txt..."
@@ -48,6 +50,7 @@ TWILIO_PHONE=${TWILIO_PHONE}
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 RESEND_API_KEY=${RESEND_API_KEY}
 EMAIL_FROM=${EMAIL_FROM}
+DO_API_TOKEN=${DO_API_TOKEN}
 EOF
 
     # 3) Integrity check
