@@ -245,6 +245,36 @@ setup_workspace() {
     log "✅ Workspace ready → ${UPLOAD_DIR}"
 }
 
+setup_llmvariables() {
+    local env_file="$1"
+
+    # Ollama (primary) — OpenRouter stays as backup
+    local ollama_base_url="${OLLAMA_BASE_URL:-http://157.245.156.1:11434}"
+    local ollama_model="${OLLAMA_MODEL:-qwen2.5:7b}"
+
+    upsert_env_entry "OLLAMA_BASE_URL" "$ollama_base_url" "$env_file"
+    upsert_env_entry "OLLAMA_MODEL" "$ollama_model" "$env_file"
+    upsert_env_entry "LLM_PRIMARY" "ollama" "$env_file"
+    upsert_env_entry "LLM_FALLBACK" "openrouter" "$env_file"
+
+}
+
+setup_do_token_file() {
+    local token="$1"
+    local data_dir="${2:-$HERMES_DATA}"
+    local uid="${3:-1000}"
+    local gid="${4:-1000}"
+
+    [[ -n "$token" ]] || return 0
+
+    mkdir -p "$data_dir"
+    printf '%s' "$token" > "${data_dir}/do_api_token"
+    chmod 600 "${data_dir}/do_api_token"
+    chown "${uid}:${gid}" "${data_dir}/do_api_token" 2>/dev/null || true
+    log "✓ DO token file written → ${data_dir}/do_api_token"
+}
+
+
 # ====================== MAIN CONFIGURATION ======================
 configure_and_launch() {
     # ----------------------------------------------------------------------
@@ -437,7 +467,8 @@ configure_and_launch() {
     if [[ -n "$do_api_token" ]]; then
         upsert_env_entry "DO_API_TOKEN" "$do_api_token" "$env_file"
     fi
-
+    setup_do_token_file "$do_api_token" "$HERMES_DATA" "$RUNNER_UID" "$RUNNER_GID"
+    setup_llmvariables "$env_file"
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
 
     # ----------------------------------------------------------------------
