@@ -247,16 +247,61 @@ setup_workspace() {
 
 setup_llmvariables() {
     local env_file="$1"
+    local ollama_base_url="${2:-}"
+    local ollama_model="${3:-qwen2.5:7b}"
+    local llm_primary="${4:-ollama}"
+    local llm_fallback="${5:-openrouter/free}"
 
-    # Ollama (primary) — OpenRouter stays as backup
-    local ollama_base_url="${OLLAMA_BASE_URL:-http://157.245.156.1:11434}"
-    local ollama_model="${OLLAMA_MODEL:-qwen2.5:7b}"
+    # defaults if secrets had nothing
+    ollama_base_url="${ollama_base_url:-http://157.245.193.221:11434}"
+    ollama_model="${ollama_model:-qwen2.5:7b}"
 
     upsert_env_entry "OLLAMA_BASE_URL" "$ollama_base_url" "$env_file"
     upsert_env_entry "OLLAMA_MODEL" "$ollama_model" "$env_file"
-    upsert_env_entry "LLM_PRIMARY" "ollama" "$env_file"
-    upsert_env_entry "LLM_FALLBACK" "openrouter" "$env_file"
+    upsert_env_entry "LLM_PRIMARY" "$llm_primary" "$env_file"
+    upsert_env_entry "LLM_FALLBACK" "$llm_fallback" "$env_file"
+    log "✓ LLM vars → primary=${llm_primary} ollama=${ollama_base_url}"
+}
 
+setup_hermes_model_config() {
+    local data_dir="${1:-$HERMES_DATA}"
+    local ollama_url="${2:-}"
+    local ollama_model="${3:-qwen2.5:7b}"
+    local openrouter_model="${4:-openrouter/free}"
+    local uid="${5:-1000}"
+    local gid="${6:-1000}"
+
+    mkdir -p "$data_dir"
+
+    # If no Ollama URL yet, keep OpenRouter as primary
+    if [[ -z "$ollama_url" ]]; then
+        log "⚠️ OLLAMA_BASE_URL empty – Hermes stays on OpenRouter only"
+        cat > "${data_dir}/config.yaml" << EOF
+model:
+  default: "${openrouter_model}"
+  provider: openrouter
+EOF
+    else
+        # Ollama primary, OpenRouter fallback
+        # Hermes expects OpenAI-compatible base: .../v1
+        local base="${ollama_url%/}"
+        [[ "$base" == */v1 ]] || base="${base}/v1"
+
+        cat > "${data_dir}/config.yaml" << EOF
+model:
+  default: "${ollama_model}"
+  provider: custom
+  base_url: "${base}"
+
+fallback_providers:
+  - provider: openrouter
+    model: "${openrouter_model}"
+EOF
+        log "✓ Hermes model config → Ollama primary (${base}), OpenRouter backup"
+    fi
+
+    chown "${uid}:${gid}" "${data_dir}/config.yaml" 2>/dev/null || true
+    chmod 644 "${data_dir}/config.yaml"
 }
 
 setup_do_token_file() {
@@ -295,7 +340,12 @@ configure_and_launch() {
     local age_key="${AGE_ID:-/home/$USER/.ssh/id_ed25519}"
     local resend_api_key="" 
     local do_api_token=""
+    local ollama_base_url="" 
+    local ollama_model=""
+    local llm_primary="" 
+    local llm_fallback=""
     local email_from=""
+
 
     # ----------------------------------------------------------------------
     # 2️⃣ Dependency Assertions
@@ -378,6 +428,10 @@ configure_and_launch() {
             RESEND_API_KEY) resend_api_key="$val" ;;       # ← ADD
             EMAIL_FROM) email_from="$val" ;;               # ← ADD
             DO_API_TOKEN) do_api_token="$val" ;;
+            OLLAMA_BASE_URL) ollama_base_url="$val" ;;
+            OLLAMA_MODEL) ollama_model="$val" ;;
+            LLM_PRIMARY) llm_primary="$val" ;;
+            LLM_FALLBACK) llm_fallback="$val" ;;
         esac
     done <"$temp_env"
 
@@ -468,8 +522,20 @@ configure_and_launch() {
         upsert_env_entry "DO_API_TOKEN" "$do_api_token" "$env_file"
     fi
     setup_do_token_file "$do_api_token" "$HERMES_DATA" "$RUNNER_UID" "$RUNNER_GID"
-    setup_llmvariables "$env_file"
+    setup_llmvariables "$env_file" \
+    "$ollama_base_url" \
+    "$ollama_model" \
+    "${llm_primary:-ollama}" \
+    "${llm_fallback:-openrouter/free}"
     chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
+    
+    setup_hermes_model_config \
+    "$HERMES_DATA" \
+    "$ollama_url" \
+    "$ollama_model" \
+    "$openrouter_model" \
+    "$RUNNER_UID" \
+    "$RUNNER_GID"
 
     # ----------------------------------------------------------------------
     # 9️⃣ Render Compose + Entrypoint + Launch (3 parameters now)
