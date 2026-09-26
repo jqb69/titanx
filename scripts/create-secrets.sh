@@ -30,6 +30,21 @@ create_secrets() {
   echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$SECRETS_TXT"
   log "✓ Redis, API configs, and SECRET_KEY appended"
 
+  # Ollama defaults if missing from secrets.txt
+  if ! grep -q '^OLLAMA_BASE_URL=' "$SECRETS_TXT" 2>/dev/null; then
+    echo "OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://157.245.193.221:11434}" >> "$SECRETS_TXT"
+    log "✓ OLLAMA_BASE_URL default appended"
+  fi
+  if ! grep -q '^OLLAMA_MODEL=' "$SECRETS_TXT" 2>/dev/null; then
+    echo "OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}" >> "$SECRETS_TXT"
+    log "✓ OLLAMA_MODEL default appended"
+  fi
+  if ! grep -q '^LLM_PRIMARY=' "$SECRETS_TXT" 2>/dev/null; then
+    echo "LLM_PRIMARY=ollama" >> "$SECRETS_TXT"
+  fi
+  if ! grep -q '^LLM_FALLBACK=' "$SECRETS_TXT" 2>/dev/null; then
+    echo "LLM_FALLBACK=openrouter" >> "$SECRETS_TXT"
+  fi
   # 3. Prepare .hermes directory
   mkdir -p "$HERMES_DATA"
   chown "$USER":"$USER" "$HERMES_DATA"
