@@ -43,7 +43,7 @@ create_secrets() {
     echo "LLM_PRIMARY=ollama" >> "$SECRETS_TXT"
   fi
   if ! grep -q '^LLM_FALLBACK=' "$SECRETS_TXT" 2>/dev/null; then
-    echo "LLM_FALLBACK=openrouter" >> "$SECRETS_TXT"
+    echo "LLM_FALLBACK=openrouter/free" >> "$SECRETS_TXT"
   fi
   # 3. Prepare .hermes directory
   mkdir -p "$HERMES_DATA"
