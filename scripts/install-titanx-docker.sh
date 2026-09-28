@@ -533,7 +533,7 @@ configure_and_launch() {
     "$HERMES_DATA" \
     "$ollama_base_url" \
     "$ollama_model" \
-    "${llm_fallback:-openrouter/free}"
+    "${llm_fallback:-openrouter/free}" \
     "$RUNNER_UID" \
     "$RUNNER_GID"
 
