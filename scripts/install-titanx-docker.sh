@@ -344,6 +344,7 @@ configure_and_launch() {
     local ollama_model=""
     local llm_primary="" 
     local llm_fallback=""
+    local openrouter_model=""
     local email_from=""
 
 
@@ -522,21 +523,16 @@ configure_and_launch() {
         upsert_env_entry "DO_API_TOKEN" "$do_api_token" "$env_file"
     fi
     setup_do_token_file "$do_api_token" "$HERMES_DATA" "$RUNNER_UID" "$RUNNER_GID"
-    setup_llmvariables "$env_file" \
-    "$ollama_base_url" \
-    "$ollama_model" \
-    "${llm_primary:-ollama}" \
-    "${llm_fallback:-openrouter/free}"
-    chown "${RUNNER_UID}:${RUNNER_GID}" "$env_file"
-    
-    setup_hermes_model_config \
-    "$HERMES_DATA" \
-    "$ollama_base_url" \
-    "$ollama_model" \
-    "${llm_fallback:-openrouter/free}" \
-    "$RUNNER_UID" \
-    "$RUNNER_GID"
+    # ALWAYS resolve before writing config.yaml
+    ollama_base_url="${ollama_base_url:-http://157.245.193.221:11434}"
+    ollama_model="${ollama_model:-qwen2.5:7b}"
+    openrouter_model="${openrouter_model:-openrouter/free}"
 
+    setup_llmvariables "$env_file" "$ollama_base_url" "$ollama_model" \
+    "${llm_primary:-ollama}" "${llm_fallback:-openrouter}"
+
+    setup_hermes_model_config "$HERMES_DATA" "$ollama_base_url" "$ollama_model" \
+    "$openrouter_model" "$RUNNER_UID" "$RUNNER_GID"
     # ----------------------------------------------------------------------
     # 9️⃣ Render Compose + Entrypoint + Launch (3 parameters now)
     # ----------------------------------------------------------------------
