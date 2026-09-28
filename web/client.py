@@ -54,7 +54,7 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
         full_url = f"{url.rstrip('/')}{endpoint}"
         try:
             payload = {
-                "model": config.OPENROUTER_MODEL,
+                "model": config.resolve_model(),
                 "messages": format_messages(messages),
                 "stream": True,
             }
@@ -116,7 +116,7 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     payload = {
         "task_id": f"job_{int(time.time())}",
         "messages": format_messages(messages),   # Pre-format!
-        "model": config.OPENROUTER_MODEL,
+        "model": config.resolve_model(),
         "task_type": "chat",
         "stream": False
     }
