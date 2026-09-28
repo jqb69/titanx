@@ -106,6 +106,13 @@ REDIS_FILE_TEXT_PREFIX = "mikie:files:text:"     # STRING cache (1 week)
 _ALLOWED_RAW = os.getenv("ALLOWED_FILE_EXTENSIONS", "")
 ALLOWED_FILE_EXTENSIONS = None if not _ALLOWED_RAW else {e.strip().lower() for e in _ALLOWED_RAW.split(",")}
 
+# === LLM ROUTING ===
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+LLM_PRIMARY = os.getenv("LLM_PRIMARY", "ollama").lower()
+LLM_FALLBACK = os.getenv("LLM_FALLBACK", "openrouter").lower()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+
 CUSTOM_CSS = """
 <style>
  .stApp { background-color: #0a0a0a; color: #ffffff; }
@@ -115,3 +122,9 @@ CUSTOM_CSS = """
  .error-box { color: #ff6b6b; }
 </style>
 """
+
+def resolve_model() -> str:
+    """Ollama when primary; else OpenRouter."""
+    if LLM_PRIMARY == "ollama" and OLLAMA_MODEL:
+        return OLLAMA_MODEL
+    return OPENROUTER_MODEL or "openrouter/free"
