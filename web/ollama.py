@@ -124,21 +124,28 @@ def post_chat(
     timeout: tuple = (5, 180),
 ) -> str | None:
     """
-    Stream a chat completion from Ollama.
-    Returns full text on success, None on failure.
-    placeholder: optional Streamlit element with .markdown()
+    Stream chat from Ollama.
+
+    Args:
+        messages: list of {"role": "...", "content": "..."}
+        placeholder: optional object with .markdown(str)
+        base_url: override config.OLLAMA_BASE_URL
+        model: override config model
+        timeout: (connect, read) seconds
+
+    Returns:
+        full response text, or None on failure
     """
     base = _base_url(base_url)
     if not base:
         return None
 
-    model = model or (
-        config.resolve_model()
-        if hasattr(config, "resolve_model")
-        else _wanted_model()
-    )
+    if model is None:
+        if hasattr(config, "resolve_model"):
+            model = config.resolve_model()
+        else:
+            model = _wanted_model()
 
-    # Prefer native /api/chat (stream NDJSON)
     url = f"{base}/api/chat"
     payload = {
         "model": model,
@@ -150,9 +157,12 @@ def post_chat(
     try:
         with requests.post(url, json=payload, stream=True, timeout=timeout) as r:
             if r.status_code != 200:
-                # fallback: OpenAI-compatible endpoint
                 return _post_openai_compat(
-                    base, model, messages, placeholder, timeout, r.status_code
+                    base=base,
+                    model=model,
+                    messages=messages,
+                    placeholder=placeholder,
+                    timeout=timeout,
                 )
 
             for raw in r.iter_lines(decode_unicode=True):
@@ -185,14 +195,11 @@ def post_chat(
 
         return full if full.strip() else None
 
-    except requests.exceptions.ConnectionError:
-        return None
-    except requests.exceptions.Timeout:
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
         return None
     except Exception:
         return None
-
-
+       
 def _post_openai_compat(
     base: str,
     model: str,
