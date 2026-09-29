@@ -121,14 +121,10 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
 def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     """Multi-instance + endpoint probing + reasoning preserved."""
     headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"} if getattr(config, "HERMES_API_KEY", None) else {}
-    placeholder.markdown(f"*{ollama_status_line()}*")
-  
-    if getattr(config, "LLM_PRIMARY", "ollama") == "ollama":
+    try:
         placeholder.markdown(f"*{ollama_status_line()}*")
-        result = post_to_ollama(messages, placeholder)
-        if result:
-            return result
-        placeholder.markdown("⚠️ Ollama chat failed → Hermes…")
+    except Exception:
+        pass
     # 1. Try Main Hermes (with full endpoint probing)
     result = post_to_hermes(config.HERMES_URL, headers, messages, placeholder)
     if result and not str(result).startswith("❌"):
@@ -141,6 +137,13 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
         result = post_to_hermes(avangarde_url, headers, messages, placeholder)
         if result and not str(result).startswith("❌"):
             return result
+          
+     # 3. Direct Ollama (timeout / unreachable harness fallback)
+    placeholder.markdown("⚠️ Hermes path failed → direct Ollama…")
+    result = post_to_ollama(messages, placeholder)
+    if result and not str(result).startswith("❌"):
+        return result
+    
 
     # 3. Final fallback: Enqueue
     payload = {
@@ -161,4 +164,4 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
         placeholder.markdown(f"**Queued for background processing**\nJob ID: `{job_id}`")
         return f"✅ Task queued (ID: {job_id}). Background worker is processing it."
 
-    return "❌ Both Hermes instances unreachable. Please check services."
+     return "❌ Hermes, Avangarde, and Ollama all failed."
