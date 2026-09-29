@@ -69,7 +69,14 @@ def render_sidebar_controls() -> Optional[str]:
             st.error("⚠️ Hermes Endpoint: Offline")
         else:
             st.success("🟢 Hermes Endpoint: Online")
-
+        st.markdown("---") 
+        s = client.check_ollama_health()
+        if s["ok"] and s["has_model"]:
+            st.success(client.ollama_status_line())
+        elif s["ok"]:
+            st.warning(client.ollama_status_line())
+        else:
+            st.error(client.ollama_status_line())
         st.markdown("---")
 
         # File Vault
