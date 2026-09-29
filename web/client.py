@@ -11,11 +11,11 @@ import ollama as ollama_mod
 
 
 def check_ollama_health(base_url: str = None) -> dict:
-    return ollama_mod.check_health(base_url)
+    return ollama_mod.check_health(base_url=base_url)
 
 
-def ollama_status_line() -> str:
-    return ollama_mod.status_line()
+def ollama_status_line(base_url: str = None) -> str:
+    return ollama_mod.status_line(base_url=base_url)
 
 
 def check_hermes_health(url: str = None) -> bool:
@@ -44,6 +44,20 @@ def format_messages(raw_messages: List[Dict]) -> List[Dict]:
         #     content = content.split("User Message:")[-1].strip()
         formatted.append({"role": role, "content": content})
     return formatted
+
+def post_to_ollama(messages: List[Dict], placeholder) -> str:
+    """
+    Format messages, then stream via ollama.post_chat.
+    Returns str on success, None on failure (same as post_chat).
+    """
+    return ollama_mod.post_chat(
+        messages=format_messages(messages),
+        placeholder=placeholder,
+        base_url=getattr(config, "OLLAMA_BASE_URL", None) or None,
+        model=config.resolve_model() if hasattr(config, "resolve_model") else None,
+        timeout=(5, 180),
+    )
+
 
 def extract_thinking_and_answer(full_text: str) -> Tuple[str, str]:
     think_match = re.search(r'<think>(.*?)</think>', full_text, re.DOTALL | re.IGNORECASE)
@@ -108,6 +122,13 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     """Multi-instance + endpoint probing + reasoning preserved."""
     headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"} if getattr(config, "HERMES_API_KEY", None) else {}
     placeholder.markdown(f"*{ollama_status_line()}*")
+  
+    if getattr(config, "LLM_PRIMARY", "ollama") == "ollama":
+        placeholder.markdown(f"*{ollama_status_line()}*")
+        result = post_to_ollama(messages, placeholder)
+        if result:
+            return result
+        placeholder.markdown("⚠️ Ollama chat failed → Hermes…")
     # 1. Try Main Hermes (with full endpoint probing)
     result = post_to_hermes(config.HERMES_URL, headers, messages, placeholder)
     if result and not str(result).startswith("❌"):
