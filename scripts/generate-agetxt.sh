@@ -38,7 +38,8 @@ generate_file() {
     
     OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://157.245.193.221:11434}
     OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
-
+    LLM_PRIMARY=${LLM_PRIMARY:-ollama}
+    LLM_FALLBACK=${LLM_FALLBACK:-openrouter}
     # 2) Write secrets.txt with proper mapping
     log "Writing mapped variables to secrets.txt..."
     cat <<EOF > "$SECRETS_TXT"
@@ -56,6 +57,8 @@ EMAIL_FROM=${EMAIL_FROM}
 DO_API_TOKEN=${DO_API_TOKEN}
 OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
+LLM_PRIMARY=${LLM_PRIMARY}
+LLM_FALLBACK=${LLM_FALLBACK}
 EOF
 
     # 3) Integrity check
