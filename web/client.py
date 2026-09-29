@@ -7,6 +7,15 @@ import config
 import state
 import re
 import worker
+import ollama as ollama_mod
+
+
+def check_ollama_health(base_url: str = None) -> dict:
+    return ollama_mod.check_health(base_url)
+
+
+def ollama_status_line() -> str:
+    return ollama_mod.status_line()
 
 
 def check_hermes_health(url: str = None) -> bool:
@@ -98,7 +107,7 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
 def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     """Multi-instance + endpoint probing + reasoning preserved."""
     headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"} if getattr(config, "HERMES_API_KEY", None) else {}
-
+    placeholder.markdown(f"*{ollama_status_line()}*")
     # 1. Try Main Hermes (with full endpoint probing)
     result = post_to_hermes(config.HERMES_URL, headers, messages, placeholder)
     if result and not str(result).startswith("❌"):
