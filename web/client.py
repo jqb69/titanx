@@ -120,48 +120,82 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
 
 def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     """Multi-instance + endpoint probing + reasoning preserved."""
-    headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"} if getattr(config, "HERMES_API_KEY", None) else {}
+    headers = (
+        {"Authorization": f"Bearer {config.HERMES_API_KEY}"}
+        if getattr(config, "HERMES_API_KEY", None)
+        else {}
+    )
+
     try:
         placeholder.markdown(f"*{ollama_status_line()}*")
     except Exception:
         pass
-    # 1. Try Main Hermes (with full endpoint probing)
-    result = post_to_hermes(config.HERMES_URL, headers, messages, placeholder)
+
+    # 1. Try Main Hermes
+    result = post_to_hermes(
+        config.HERMES_URL,
+        headers,
+        messages,
+        placeholder,
+    )
+
     if result and not str(result).startswith("❌"):
         return result
 
-    # 2. Try Avangarde (safe access)
+    # 2. Try Avangarde
     avangarde_url = getattr(config, "AVANGARDE_URL", None)
+
     if avangarde_url:
-        placeholder.markdown("⚠️ Main Hermes unreachable → Switching to Avangarde...")
-        result = post_to_hermes(avangarde_url, headers, messages, placeholder)
+        placeholder.markdown(
+            "⚠️ Main Hermes unreachable → Switching to Avangarde..."
+        )
+
+        result = post_to_hermes(
+            avangarde_url,
+            headers,
+            messages,
+            placeholder,
+        )
+
         if result and not str(result).startswith("❌"):
             return result
-          
-     # 3. Direct Ollama (timeout / unreachable harness fallback)
+
+    # 3. Direct Ollama fallback
     placeholder.markdown("⚠️ Hermes path failed → direct Ollama…")
+
     result = post_to_ollama(messages, placeholder)
+
     if result and not str(result).startswith("❌"):
         return result
-    
 
-    # 3. Final fallback: Enqueue
+    # 4. Final fallback: enqueue the task
     payload = {
         "task_id": f"job_{int(time.time())}",
-        "messages": format_messages(messages),   # Pre-format!
+        "messages": format_messages(messages),
         "model": config.resolve_model(),
         "task_type": "chat",
-        "stream": False
+        "stream": False,
     }
 
     try:
         enqueue_res = worker.enqueue_job(payload)
     except Exception as e:
-        enqueue_res = {"queued": False, "error": str(e)}
+        enqueue_res = {
+            "queued": False,
+            "error": str(e),
+        }
 
     if isinstance(enqueue_res, dict) and enqueue_res.get("queued"):
         job_id = enqueue_res.get("job_id", "unknown")
-        placeholder.markdown(f"**Queued for background processing**\nJob ID: `{job_id}`")
-        return f"✅ Task queued (ID: {job_id}). Background worker is processing it."
 
-     return "❌ Hermes, Avangarde, and Ollama all failed."
+        placeholder.markdown(
+            f"**Queued for background processing**\n"
+            f"Job ID: `{job_id}`"
+        )
+
+        return (
+            f"✅ Task queued (ID: {job_id}). "
+            "Background worker is processing it."
+        )
+
+    return "❌ Hermes, Avangarde, and Ollama all failed."
