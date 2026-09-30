@@ -283,7 +283,7 @@ model:
 EOF
     else
         # Ollama primary, OpenRouter fallback
-        # Hermes expects OpenAI-compatible base: .../v1
+        # context_length: Qwen 7B is 32k; Hermes default min is 64k — must override
         local base="${ollama_url%/}"
         [[ "$base" == */v1 ]] || base="${base}/v1"
 
@@ -292,6 +292,7 @@ model:
   default: "${ollama_model}"
   provider: custom
   base_url: "${base}"
+  context_length: 32768
 
 fallback_providers:
   - provider: openrouter
