@@ -292,7 +292,7 @@ model:
   default: "${ollama_model}"
   provider: custom
   base_url: "${base}"
-  context_length: 32768
+  context_length: 65536
 
 fallback_providers:
   - provider: openrouter
