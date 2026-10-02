@@ -144,8 +144,21 @@ CUSTOM_CSS = """
 </style>
 """
 
-def resolve_model() -> str:
-    """Ollama when primary; else OpenRouter."""
-    if LLM_PRIMARY == "ollama" and OLLAMA_MODEL:
-        return OLLAMA_MODEL
+def ollama_model() -> str:
+    return OLLAMA_MODEL or "qwen2.5:7b"
+
+def openrouter_model() -> str:
     return OPENROUTER_MODEL or "openrouter/free"
+
+def resolve_model(for_backend: str = "auto") -> str:
+    """
+    for_backend: "ollama" | "openrouter" | "auto"
+    auto = ollama if LLM_PRIMARY==ollama else openrouter
+    """
+    if for_backend == "ollama":
+        return ollama_model()
+    if for_backend == "openrouter":
+        return openrouter_model()
+    if LLM_PRIMARY == "ollama":
+        return ollama_model()
+    return openrouter_model()
