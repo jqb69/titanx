@@ -8,6 +8,7 @@ import state
 import re
 import worker
 import ollama as ollama_mod
+import router
 
 
 def check_ollama_health(base_url: str = None) -> dict:
@@ -77,7 +78,7 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
         full_url = f"{url.rstrip('/')}{endpoint}"
         try:
             payload = {
-                "model": config.resolve_model(),
+                "model": config.resolve_model("openrouter"),
                 "messages": format_messages(messages),
                 "stream": True,
             }
@@ -119,83 +120,82 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
 
 
 def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
-    """Multi-instance + endpoint probing + reasoning preserved."""
     headers = (
         {"Authorization": f"Bearer {config.HERMES_API_KEY}"}
         if getattr(config, "HERMES_API_KEY", None)
         else {}
     )
+    formatted = format_messages(messages)
+    user_text = router.last_user_text(messages)
+    agentic = router.is_agentic(user_text)
+    agent_msgs = formatted  # default for queue
 
-    try:
-        placeholder.markdown(f"*{ollama_status_line()}*")
-    except Exception:
-        pass
-
-    # 1. Try Main Hermes
-    result = post_to_hermes(
-        config.HERMES_URL,
-        headers,
-        messages,
-        placeholder,
-    )
-
-    if result and not str(result).startswith("❌"):
-        return result
-
-    # 2. Try Avangarde
-    avangarde_url = getattr(config, "AVANGARDE_URL", None)
-
-    if avangarde_url:
-        placeholder.markdown(
-            "⚠️ Main Hermes unreachable → Switching to Avangarde..."
-        )
-
-        result = post_to_hermes(
-            avangarde_url,
-            headers,
-            messages,
-            placeholder,
-        )
-
+    # --- CHAT: local Ollama first ---
+    if not agentic:
+        try:
+            placeholder.markdown(f"*Chat → {ollama_status_line()}*")
+        except Exception:
+            pass
+        result = post_to_ollama(messages, placeholder)
         if result and not str(result).startswith("❌"):
             return result
 
-    # 3. Direct Ollama fallback
-    placeholder.markdown("⚠️ Hermes path failed → direct Ollama…")
+        placeholder.markdown("⚠️ Local chat failed → Hermes (OpenRouter)…")
+        result = post_to_hermes(config.HERMES_URL, headers, formatted, placeholder)
+        if result and not str(result).startswith("❌"):
+            return result
 
-    result = post_to_ollama(messages, placeholder)
+        av = getattr(config, "AVANGARDE_URL", None)
+        if av:
+            result = post_to_hermes(av, headers, formatted, placeholder)
+            if result and not str(result).startswith("❌"):
+                return result
 
-    if result and not str(result).startswith("❌"):
-        return result
+    # --- AGENTIC: compress → Hermes → Avangarde ---
+    else:
+        placeholder.markdown("*Agentic → Ollama compressing brief…*")
+        try:
+            agent_msgs = router.messages_for_agent(formatted)
+        except Exception:
+            agent_msgs = formatted
 
-    # 4. Final fallback: enqueue the task
+        brief = ""
+        for m in reversed(agent_msgs):
+            if m.get("role") == "user":
+                brief = m.get("content") or ""
+                break
+        if getattr(config, "AGENTIC_SHOW_BRIEF", True) and brief:
+            safe = brief.replace("```", "'''")
+            placeholder.markdown(f"*Agent brief (Ollama → Hermes):*\n\n*{safe}*")
+
+        placeholder.markdown("*Brief ready → Hermes (OpenRouter)…*")
+        result = post_to_hermes(config.HERMES_URL, headers, agent_msgs, placeholder)
+        if result and not str(result).startswith("❌"):
+            return result
+
+        av = getattr(config, "AVANGARDE_URL", None)
+        if av:
+            placeholder.markdown("⚠️ Hermes failed → Avangarde…")
+            result = post_to_hermes(av, headers, agent_msgs, placeholder)
+            if result and not str(result).startswith("❌"):
+                return result
+
+    # --- Queue last ---
     payload = {
         "task_id": f"job_{int(time.time())}",
-        "messages": format_messages(messages),
-        "model": config.resolve_model(),
+        "messages": agent_msgs,
+        "model": config.resolve_model("openrouter"),
         "task_type": "chat",
         "stream": False,
     }
-
     try:
         enqueue_res = worker.enqueue_job(payload)
     except Exception as e:
-        enqueue_res = {
-            "queued": False,
-            "error": str(e),
-        }
+        enqueue_res = {"queued": False, "error": str(e)}
 
     if isinstance(enqueue_res, dict) and enqueue_res.get("queued"):
         job_id = enqueue_res.get("job_id", "unknown")
-
-        placeholder.markdown(
-            f"**Queued for background processing**\n"
-            f"Job ID: `{job_id}`"
-        )
-
-        return (
-            f"✅ Task queued (ID: {job_id}). "
-            "Background worker is processing it."
-        )
+        placeholder.markdown(f"**Queued** — Job ID: `{job_id}`")
+        return f"✅ Task queued (ID: {job_id}). Background worker is processing it."
 
     return "❌ Hermes, Avangarde, and Ollama all failed."
