@@ -113,6 +113,27 @@ LLM_PRIMARY = os.getenv("LLM_PRIMARY", "ollama").lower()
 LLM_FALLBACK = os.getenv("LLM_FALLBACK", "openrouter").lower()
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
+# Comma-separated; override via env AGENTIC_HINTS
+_AGENTIC_RAW = os.getenv(
+    "AGENTIC_HINTS",
+    "weather,forecast,run ,install,ssh,droplet,browse,search web,"
+    "execute,screenshot,open url,create file,delete file,docker,"
+    "deploy,terminal,shell,curl ,wget ,git clone,pip install"
+)
+AGENTIC_HINTS = tuple(
+    h.strip().lower() for h in _AGENTIC_RAW.split(",") if h.strip()
+)
+
+AGENTIC_ALWAYS_COMPRESS = os.getenv("AGENTIC_ALWAYS_COMPRESS", "false").lower() == "true"
+# optional max brief size
+
+OLLAMA_COMPRESS_CONNECT = float(os.getenv("OLLAMA_COMPRESS_CONNECT", "2"))
+OLLAMA_COMPRESS_READ = float(os.getenv("OLLAMA_COMPRESS_READ", "8"))
+AGENTIC_BRIEF_CHARS = int(os.getenv("AGENTIC_BRIEF_CHARS", "1200"))
+
+# Optional: use tiny Ollama classify pass (slower, smarter)
+AGENTIC_USE_LLM = os.getenv("AGENTIC_USE_LLM", "false").lower() == "true"
+
 CUSTOM_CSS = """
 <style>
  .stApp { background-color: #0a0a0a; color: #ffffff; }
