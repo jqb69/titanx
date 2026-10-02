@@ -265,44 +265,20 @@ setup_llmvariables() {
 
 setup_hermes_model_config() {
     local data_dir="${1:-$HERMES_DATA}"
-    local ollama_url="${2:-}"
-    local ollama_model="${3:-qwen2.5:7b}"
-    local openrouter_model="${4:-openrouter/free}"
-    local uid="${5:-1000}"
-    local gid="${6:-1000}"
+    local openrouter_model="${2:-openrouter/free}"
+    local uid="${3:-1000}"
+    local gid="${4:-1000}"
 
     mkdir -p "$data_dir"
-
-    # If no Ollama URL yet, keep OpenRouter as primary
-    if [[ -z "$ollama_url" ]]; then
-        log "⚠️ OLLAMA_BASE_URL empty – Hermes stays on OpenRouter only"
-        cat > "${data_dir}/config.yaml" << EOF
+    # Hermes agent needs ≥64k context — use OpenRouter, not local 32k Qwen
+    cat > "${data_dir}/config.yaml" << EOF
 model:
   default: "${openrouter_model}"
   provider: openrouter
 EOF
-    else
-        # Ollama primary, OpenRouter fallback
-        # context_length: Qwen 7B is 32k; Hermes default min is 64k — must override
-        local base="${ollama_url%/}"
-        [[ "$base" == */v1 ]] || base="${base}/v1"
-
-        cat > "${data_dir}/config.yaml" << EOF
-model:
-  default: "${ollama_model}"
-  provider: custom
-  base_url: "${base}"
-  context_length: 65536
-
-fallback_providers:
-  - provider: openrouter
-    model: "${openrouter_model}"
-EOF
-        log "✓ Hermes model config → Ollama primary (${base}), OpenRouter backup"
-    fi
-
     chown "${uid}:${gid}" "${data_dir}/config.yaml" 2>/dev/null || true
     chmod 644 "${data_dir}/config.yaml"
+    log "✓ Hermes → OpenRouter (${openrouter_model}); web chat uses Ollama separately"
 }
 
 setup_do_token_file() {
@@ -532,8 +508,11 @@ configure_and_launch() {
     setup_llmvariables "$env_file" "$ollama_base_url" "$ollama_model" \
     "${llm_primary:-ollama}" "${llm_fallback:-openrouter}"
 
-    setup_hermes_model_config "$HERMES_DATA" "$ollama_base_url" "$ollama_model" \
-    "$openrouter_model" "$RUNNER_UID" "$RUNNER_GID"
+    setup_hermes_model_config \
+    "$HERMES_DATA" \
+    "${openrouter_model:-openrouter/free}" \
+    "$RUNNER_UID" \
+    "$RUNNER_GID"
     # ----------------------------------------------------------------------
     # 9️⃣ Render Compose + Entrypoint + Launch (3 parameters now)
     # ----------------------------------------------------------------------
