@@ -116,9 +116,9 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 # Comma-separated; override via env AGENTIC_HINTS
 _AGENTIC_RAW = os.getenv(
     "AGENTIC_HINTS",
-    "weather,forecast,run ,install,ssh,droplet,browse,search web,"
-    "execute,screenshot,open url,create file,delete file,docker,"
-    "deploy,terminal,shell,curl ,wget ,git clone,pip install"
+    "weather,forecast,run ,install,ssh,droplet,browse,search web,encode,decode,copy,carry out"
+    "execute,screenshot,open url,create file,delete file,docker,encrypt,decrypt,study,"
+    "deploy,terminal,shell,curl ,wget ,git clone,pip install,assess,report,translate"
 )
 AGENTIC_HINTS = tuple(
     h.strip().lower() for h in _AGENTIC_RAW.split(",") if h.strip()
