@@ -79,7 +79,7 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
         try:
             payload = {
                 "model": config.resolve_model("openrouter"),
-                "messages": format_messages(messages),
+                "messages": messages,
                 "stream": True,
             }
             if getattr(config, 'REASONING_ENABLED', True):
@@ -158,12 +158,13 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
             agent_msgs = router.messages_for_agent(formatted)
         except Exception:
             agent_msgs = formatted
-        placeholder.markdown(agent_msgs)
+        #placeholder.markdown(agent_msgs)
         brief = ""
         for m in reversed(agent_msgs):
             if m.get("role") == "user":
                 brief = m.get("content") or ""
                 break
+              
         if getattr(config, "AGENTIC_SHOW_BRIEF", True) and brief:
             safe = brief.replace("```", "'''")
             placeholder.markdown(f"*Agent brief (Ollama → Hermes):*\n\n*{safe}*")
@@ -185,7 +186,7 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
         "task_id": f"job_{int(time.time())}",
         "messages": agent_msgs,
         "model": config.resolve_model("openrouter"),
-        "task_type": "chat",
+        "task_type": "agent" if agentic else "chat",
         "stream": False,
     }
     try:
