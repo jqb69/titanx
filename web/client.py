@@ -158,7 +158,7 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
             agent_msgs = router.messages_for_agent(formatted)
         except Exception:
             agent_msgs = formatted
-
+        placeholder.markdown(agent_msgs)
         brief = ""
         for m in reversed(agent_msgs):
             if m.get("role") == "user":
