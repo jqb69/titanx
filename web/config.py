@@ -116,13 +116,17 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 # Comma-separated; override via env AGENTIC_HINTS
 _AGENTIC_RAW = os.getenv(
     "AGENTIC_HINTS",
-    "weather,forecast,run ,install,ssh,droplet,browse,search web,encode,decode,copy,carry out"
-    "execute,screenshot,open url,create file,delete file,docker,encrypt,decrypt,study,"
-    "deploy,terminal,shell,curl ,wget ,git clone,pip install,assess,report,translate"
+    "weather,forecast,run ,install,ssh,droplet,browse,search web,encode,decode,copy,"
+    "carry out,execute,screenshot,open url,create file,delete file,docker,encrypt,decrypt,study,"
+    "deploy,terminal,shell,curl ,wget ,git clone,pip install,assess,report,translate,"
+    "code,coding,refactor,patch,fix,bug,error,stack,traceback,"
+    "titanx,mikie,avangarde,hermes,ollama,openrouter,"
+    "review,compile,build,debug,trace,task,implement,deploy,repo,github,commit,pr,merge",
 )
 AGENTIC_HINTS = tuple(
     h.strip().lower() for h in _AGENTIC_RAW.split(",") if h.strip()
 )
+AGENTIC_SHOW_BRIEF = os.getenv("AGENTIC_SHOW_BRIEF", "true").lower() == "true"
 
 AGENTIC_ALWAYS_COMPRESS = os.getenv("AGENTIC_ALWAYS_COMPRESS", "false").lower() == "true"
 # optional max brief size
