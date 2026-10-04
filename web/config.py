@@ -31,10 +31,7 @@ RESULTS_QUEUE = "hermes:results"
 ENDPOINTS = [
     "/v1/chat/completions",
     "/chat/completions",
-    "/",
-    "/api/chat",
-    "/v1/chat",
-    "/message"
+    "/"
 ]
 
 # === FILE VAULT (REDIS-OPTIMIZED) ===
@@ -43,7 +40,6 @@ MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
 # web/config.py — Updated with file vault settings
 # Changes: 9 new FILE_ variables. All existing settings preserved exactly.
 
-import os
 
 # === CORE ENDPOINTS ===
 HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642").rstrip("/")
@@ -120,7 +116,7 @@ _AGENTIC_RAW = os.getenv(
     "carry out,execute,screenshot,open url,create file,delete file,docker,encrypt,decrypt,study,"
     "deploy,terminal,shell,curl ,wget ,git clone,pip install,assess,report,translate,"
     "code,coding,refactor,patch,fix,bug,error,stack,traceback,"
-    "titanx,mikie,avangarde,hermes,ollama,openrouter,"
+    "titanx,mikie,avangarde,hermes,ollama,openrouter,organize,"
     "review,compile,build,debug,trace,task,implement,deploy,repo,github,commit,pr,merge",
 )
 AGENTIC_HINTS = tuple(
@@ -141,12 +137,23 @@ AGENTIC_USE_LLM = os.getenv("AGENTIC_USE_LLM", "false").lower() == "true"
 CUSTOM_CSS = """
 <style>
  .stApp { background-color: #0a0a0a; color: #ffffff; }
- .stChatMessage { border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+ .stChatMessage {
+   border-radius: 12px;
+   padding: 14px;
+   margin-bottom: 10px;
+ }
  h1 { color: #ffffff; text-align: center; font-weight: 300; }
- .file-box { background-color: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px dashed #333; margin-bottom: 10px; }
+ .file-box {
+   background-color: #1a1a1a;
+   padding: 10px;
+   border-radius: 8px;
+   border: 1px dashed #333;
+   margin-bottom: 10px;
+ }
  .error-box { color: #ff6b6b; }
 </style>
 """
+
 
 def ollama_model() -> str:
     return OLLAMA_MODEL or "qwen2.5:7b"
