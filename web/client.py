@@ -9,7 +9,7 @@ import re
 import worker
 import ollama as ollama_mod
 import router
-
+_SESSION = requests.Session()
 
 def check_ollama_health(base_url: str = None) -> dict:
     return ollama_mod.check_health(base_url=base_url)
@@ -85,7 +85,7 @@ def post_to_hermes(url: str, headers: dict, messages: List[Dict], placeholder) -
             if getattr(config, 'REASONING_ENABLED', True):
                 payload["reasoning"] = {"enabled": True, "effort": getattr(config, 'REASONING_EFFORT', "medium")}
 
-            with requests.post(full_url, json=payload, headers=headers, stream=True, timeout=(5, 120)) as r:
+            with _SESSION.post(full_url, json=payload, headers=headers, stream=True, timeout=(5, 60)) as r:
                 if r.status_code != 200:
                     continue  # Try next endpoint
 
