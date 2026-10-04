@@ -56,7 +56,7 @@ def post_to_ollama(messages: List[Dict], placeholder) -> str:
         placeholder=placeholder,
         base_url=getattr(config, "OLLAMA_BASE_URL", None) or None,
         model=config.resolve_model() if hasattr(config, "resolve_model") else None,
-        timeout=(5, 180),
+        timeout=(5, 80),
     )
 
 
@@ -187,7 +187,7 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
         "messages": agent_msgs,
         "model": config.resolve_model("openrouter"),
         "task_type": "agent" if agentic else "chat",
-        "stream": False,
+        "stream": True,
     }
     try:
         enqueue_res = worker.enqueue_job(payload)
