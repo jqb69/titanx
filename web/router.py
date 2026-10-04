@@ -20,7 +20,7 @@ def is_agentic_llm(text: str) -> Optional[bool]:
     if not getattr(config, "AGENTIC_USE_LLM", False):
         return None
     try:
-        import ollama as ollama_mod
+        #import ollama as ollama_mod
         prompt = (
             "Classify the user message. Reply with exactly one word: "
             "AGENT if it needs tools, web, terminal, files, deploy, or live data; "
@@ -99,7 +99,7 @@ def compress_for_agent(text: str, max_chars: int = None) -> str:
                 "model": model,
                 "messages": [
                     {"role": "system", "content": system},
-                    {"role": "user", "content": text[:4000]},
+                    {"role": "user", "content": text[:2000]},
                 ],
                 "stream": False,
             },
@@ -126,3 +126,4 @@ def messages_for_agent(messages: list) -> list:
         raw = out[last_user_idx].get("content") or ""
         out[last_user_idx]["content"] = compress_for_agent(raw)
     return out
+    
