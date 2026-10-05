@@ -93,7 +93,8 @@ def compress_for_agent(text: str, max_chars: int = None) -> str:
     )
     try:
         import requests
-        r = requests.post(
+        _SESSION = requests.Session()
+        r = _SESSION.post(
             f"{base}/api/chat",
             json={
                 "model": model,
