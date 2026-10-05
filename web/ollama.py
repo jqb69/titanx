@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import requests
 import config
 
+_SESSION = requests.Session()
 
 def _base_url(override: Optional[str] = None) -> str:
     return (override or getattr(config, "OLLAMA_BASE_URL", "") or "").rstrip("/")
@@ -155,7 +156,7 @@ def post_chat(
 
     full = ""
     try:
-        with requests.post(url, json=payload, stream=True, timeout=timeout) as r:
+        with _SESSION.post(url, json=payload, stream=True, timeout=timeout) as r:
             if r.status_code != 200:
                 return _post_openai_compat(
                     base=base,
