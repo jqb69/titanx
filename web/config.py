@@ -126,7 +126,10 @@ AGENTIC_SHOW_BRIEF = os.getenv("AGENTIC_SHOW_BRIEF", "true").lower() == "true"
 
 AGENTIC_ALWAYS_COMPRESS = os.getenv("AGENTIC_ALWAYS_COMPRESS", "false").lower() == "true"
 # optional max brief size
+OLLAMA_CHAT_TIMEOUT = (4, 90)          # was implicit (5, 180)
 
+AGENTIC_USE_LLM = False
+AGENTIC_BRIEF_CHARS = 1200
 OLLAMA_COMPRESS_CONNECT = float(os.getenv("OLLAMA_COMPRESS_CONNECT", "2"))
 OLLAMA_COMPRESS_READ = float(os.getenv("OLLAMA_COMPRESS_READ", "8"))
 AGENTIC_BRIEF_CHARS = int(os.getenv("AGENTIC_BRIEF_CHARS", "1200"))
