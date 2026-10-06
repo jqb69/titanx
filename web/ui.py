@@ -118,7 +118,7 @@ def render_generation_sequence(prompt: str, file_context: Optional[str]) -> None
         placeholder.markdown("Thinking...")
 
         stop_slot = st.empty()
-        if stop_slot.button("🛑 Stop Generation", key="stop_generation", type="primary"):
+        if stop_slot.button("🛑 Stop Generation", key="stop_generation_btn", type="primary"):
             state.set_stop_flag(True)
 
         final_response = client.run_routing_pipeline(state.get_messages(), placeholder)
