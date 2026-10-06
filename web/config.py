@@ -120,15 +120,7 @@ AGENTIC_ALWAYS_COMPRESS = os.getenv("AGENTIC_ALWAYS_COMPRESS", "false").lower() 
 
 AGENTIC_SHOW_BRIEF = True
 
-# Identity (split personality = prompts, not dual calls)
-SYSTEM_CHAT = (
-    "You are Mikie-Qwen, local TitanX chat. Concise. "
-    "Tools/deploy/SSH are handled by the Hermes agent path."
-)
-SYSTEM_AGENT = (
-    "You are MIKIE (Hermes agent on TitanX). Technical, modular, no fluff. "
-    "Prior turns may be from local chat; continue the same task."
-)
+
 #AGENTIC_USE_LLM = False
 # Timeouts
 HERMES_TIMEOUT = (4, 45)
