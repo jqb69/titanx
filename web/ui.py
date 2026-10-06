@@ -111,26 +111,32 @@ def render_generation_sequence(prompt: str, file_context: Optional[str]) -> None
         # NEW: show which files were attached to this outgoing message
         if file_context:
             file_ui.render_message_file_chips(user_payload)
-
+            
+    state.set_stop_flag(False)
     with st.chat_message("assistant"):
         placeholder = st.empty()
         placeholder.markdown("Thinking...")
 
         stop_slot = st.empty()
-        if stop_slot.button("🛑 Stop Generation", key=f"stop_{int(time.time()*1000)}", type="primary"):
+        if stop_slot.button("🛑 Stop Generation", key="stop_generation", type="primary"):
             state.set_stop_flag(True)
 
         final_response = client.run_routing_pipeline(state.get_messages(), placeholder)
 
         stop_slot.empty()
 
-        thinking, clean_answer = client.extract_thinking_and_answer(final_response)
+        thinking, clean_answer = client.extract_thinking_and_answer(final_response or "")
         if thinking:
             with st.expander("🤔 Thinking Process", expanded=False):
-                st.markdown(
-                    f"<div style='font-size:0.9em; color:#aaaaaa; background:#1a1a1a; padding:12px; border-radius:8px; white-space:pre-wrap;'>{thinking}</div>",
-                    unsafe_allow_html=True,
+                html = (
+                    "<div style='font-size:0.9em; color:#aaaaaa; "
+                    "background:#1a1a1a; padding:12px; border-radius:8px; "
+                    "white-space:pre-wrap;'>"
+                    f"{thinking}</div>"
                 )
+                st.markdown(html, unsafe_allow_html=True)
 
-        placeholder.markdown(clean_answer)
-        state.append_message("assistant", final_response)
+        placeholder.markdown(clean_answer or final_response or "_(empty)_")
+
+        if final_response:
+            state.append_message("assistant", clean_answer or final_response)
