@@ -27,7 +27,7 @@ def check_hermes_health(url: str = None) -> bool:
         if getattr(config, "HERMES_API_KEY", None):
             headers = {"Authorization": f"Bearer {config.HERMES_API_KEY}"}
 
-        r = requests.get(f"{url}/health", headers=headers, timeout=4)
+        r = _SESSION.get(f"{url}/health", headers=headers, timeout=4)
         return r.status_code == 200
     except Exception:
         return False
@@ -55,8 +55,8 @@ def post_to_ollama(messages: List[Dict], placeholder) -> str:
         messages=format_messages(messages),
         placeholder=placeholder,
         base_url=getattr(config, "OLLAMA_BASE_URL", None) or None,
-        model=config.resolve_model() if hasattr(config, "resolve_model") else None,
-        timeout=(5, 80),
+        model=config.resolve_model("ollama") if hasattr(config, "resolve_model") else None,
+        timeout=getattr(config, "OLLAMA_CHAT_TIMEOUT", (4, 90)),
     )
 
 
@@ -128,14 +128,16 @@ def run_routing_pipeline(messages: List[Dict], placeholder) -> str:
     formatted = format_messages(messages)
     user_text = router.last_user_text(messages)
     agentic = router.is_agentic(user_text)
+    formatted = config.with_system(formatted, config.SYSTEM_AGENT)
     agent_msgs = formatted  # default for queue
-
+    
     # --- CHAT: local Ollama first ---
     if not agentic:
         try:
             placeholder.markdown(f"*Chat → {ollama_status_line()}*")
         except Exception:
             pass
+        messages = config.with_system(messages, config.SYSTEM_CHAT)
         result = post_to_ollama(messages, placeholder)
         if result and not str(result).startswith("❌"):
             return result
