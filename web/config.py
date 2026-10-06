@@ -274,16 +274,6 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "MIKIE <onboarding@resend.dev>")
 
-# Fallback endpoints (retained for endpoint-probing resilience)
-ENDPOINTS = [
-    "/v1/chat/completions",
-    "/chat/completions",
-    "/",
-    "/api/chat",
-    "/v1/chat",
-    "/message"
-]
-
 # === FILE VAULT (REDIS-OPTIMIZED) ===
 FILE_STORAGE_DIR = os.getenv("FILE_STORAGE_DIR", "/workspace/mikie_files")
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
