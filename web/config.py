@@ -2,7 +2,7 @@
 # Changes: 4 new FILE_ variables. All existing settings preserved exactly.
 
 import os
-
+from typing import List, Dict
 # === CORE ENDPOINTS ===
 HERMES_URL = os.getenv("HERMES_URL", "http://titanx-hermes:8642").rstrip("/")
 AVANGARDE_URL = os.getenv("AVANGARDE_URL", "http://avangarde:8080").rstrip("/")
@@ -160,21 +160,24 @@ CUSTOM_CSS = """
  .error-box { color: #ff6b6b; }
 </style>
 """
-# Identity (split personality = prompts, not dual calls)
+
+
 SYSTEM_CHAT = (
     "You are Mikie-Qwen, local TitanX chat. Concise. "
-    "Tools/deploy/SSH are handled by the Hermes agent path."
+    "Tools/deploy/SSH go through the Hermes agent path."
 )
 SYSTEM_AGENT = (
     "You are MIKIE (Hermes agent on TitanX). Technical, modular, no fluff. "
     "Prior turns may be from local chat; continue the same task."
 )
 
-def _with_system(msgs, system: str) -> list:
-    return [{"role": "system", "content": system}, *msgs]
-# chat:  _with_system(formatted, config.SYSTEM_CHAT)
-# agent: _with_system(agent_msgs, config.SYSTEM_AGENT)
-
+def with_system(msgs: List[Dict], system: str) -> List[Dict]:
+    """Prepend system message; strip existing system roles to avoid stacking."""
+    if not system:
+        return list(msgs or [])
+    body = [m for m in (msgs or []) if m.get("role") != "system"]
+    return [{"role": "system", "content": system}, *body]
+    
 def ollama_model() -> str:
     return OLLAMA_MODEL or "qwen2.5:7b"
 
