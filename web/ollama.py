@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 import config
+import state
 
 _SESSION = requests.Session()
 
@@ -53,7 +54,7 @@ def check_health(base_url: Optional[str] = None, timeout: float = 5.0) -> Dict[s
     try:
         import time
         t0 = time.monotonic()
-        r = requests.get(url, timeout=timeout)
+        r = _SESSION.get(url, timeout=timeout)
         result["latency_ms"] = int((time.monotonic() - t0) * 1000)
 
         if r.status_code != 200:
@@ -168,7 +169,7 @@ def post_chat(
 
             for raw in r.iter_lines(decode_unicode=True):
                 try:
-                    import state
+                    
                     if state.is_stopped():
                         full += "\n\n🛑 *Generation cancelled by user.*"
                         break
@@ -200,6 +201,42 @@ def post_chat(
         return None
     except Exception:
         return None
+
+def suggest_title(user_text: str, assistant_text: str = "", *, max_words: int = 6) -> Optional[str]:
+    """
+    Short chat title via local Ollama. Returns None on failure (caller falls back).
+    Uses module _SESSION — no new connection per title.
+    """
+    base = _base_url()
+    if not base or not (user_text or "").strip():
+        return None
+
+    model = _wanted_model()
+    prompt = (
+        f"Create a short chat title (max {max_words} words) for this conversation. "
+        "No quotes, no trailing punctuation, no 'Title:'.\n\n"
+        f"User: {(user_text or '')[:400]}\n"
+    )
+    if assistant_text:
+        prompt += f"Assistant: {(assistant_text or '')[:200]}\n"
+
+    try:
+        r = _SESSION.post(
+            f"{base}/api/chat",
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
+            timeout=(2, 6),
+        )
+        if r.status_code != 200:
+            return None
+        title = ((r.json().get("message") or {}).get("content") or "").strip()
+        title = title.strip("\"'").split("\n")[0].strip()[:60]
+        return title or None
+    except Exception:
+        return None
        
 def _post_openai_compat(
     base: str,
@@ -207,14 +244,13 @@ def _post_openai_compat(
     messages: list,
     placeholder,
     timeout: tuple,
-    prev_status: int,
 ) -> str | None:
     """Fallback: POST /v1/chat/completions (SSE)."""
     url = f"{base}/v1/chat/completions"
     payload = {"model": model, "messages": messages, "stream": True}
     full = ""
     try:
-        with requests.post(url, json=payload, stream=True, timeout=timeout) as r:
+        with _SESSION.post(url, json=payload, stream=True, timeout=timeout) as r:
             if r.status_code != 200:
                 return None
             for raw in r.iter_lines(decode_unicode=True):
