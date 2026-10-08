@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional
 
 import requests
-
+import re
 import config
 
 # One pool for all Ollama side-calls (classify + compress)
@@ -20,7 +20,9 @@ def is_agentic_keywords(text: str) -> bool:
     t = (text or "").lower()
     if not t:
         return False
-    return any(h in t for h in getattr(config, "AGENTIC_HINTS", ()))
+    hints = getattr(config, "AGENTIC_HINTS", ())
+    return any(re.search(rf"\b{re.escape(h.strip())}\b", t) for h in hints if h.strip())
+
 
 
 def is_agentic_llm(text: str) -> Optional[bool]:
