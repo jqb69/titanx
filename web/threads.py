@@ -83,21 +83,32 @@ def get_thread(tid: str) -> Optional[Dict[str, str]]:
     return meta or None
 
 
-def rename_thread(tid: str, title: str) -> None:
+def _owned(tid: str, username: str) -> bool:
+    meta = get_thread(tid) or {}
+    return bool(meta) and meta.get("user") == username.lower()
+
+
+def rename_thread(tid: str, title: str, username: str = "") -> None:
+    if username and not _owned(tid, username):
+        return
     r = _redis()
     r.hset(f"thread:{tid}", mapping={"title": title[:80], "updated_at": str(time.time())})
 
 
-def set_thread_topic(tid: str, topic_id: str) -> None:
-    """topic_id="" removes from topic (standalone)."""
+def set_thread_topic(tid: str, topic_id: str, username: str = "") -> None:
+    if username and not _owned(tid, username):
+        return
     r = _redis()
     r.hset(f"thread:{tid}", mapping={"topic_id": topic_id or "", "updated_at": str(time.time())})
 
 
 def delete_thread(tid: str, username: str) -> None:
+    if not _owned(tid, username):
+        return
     r = _redis()
     r.srem(f"user:{username.lower()}:threads", tid)
     r.delete(f"thread:{tid}", f"thread:{tid}:messages")
+
 
 
 def load_messages(tid: str) -> List[Dict[str, str]]:
