@@ -95,24 +95,32 @@ def _render_topic_create(username: str) -> None:
         st.rerun()
 
 def _render_topic_manage(username: str, filter_topic: Optional[str]) -> None:
+    """Rename/delete only when filter is a real topic id."""
     if not filter_topic:
         return
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Rename topic", key="btn_rename_topic"):
-            st.session_state["_rename_topic"] = filter_topic
-    with c2:
-        if st.button("Delete topic", key="btn_del_topic"):
-            topics.delete_topic(filter_topic, username)
-            st.session_state.active_topic_id = None
-            st.rerun()
 
-    if st.session_state.get("_rename_topic") == filter_topic:
-        nt = st.text_input("New topic name", key="rename_topic_input")
-        if st.button("Save topic name") and nt.strip():
-            topics.rename_topic(filter_topic, nt.strip())
-            st.session_state.pop("_rename_topic", None)
-            st.rerun()
+    meta_title = next(
+        (t["title"] for t in topics.list_topics(username) if t["id"] == filter_topic),
+        "Topic",
+    )
+
+    with st.expander(f"Manage topic: {meta_title}", expanded=False):
+        new_name = st.text_input(
+            "Rename to",
+            value=meta_title,
+            key=f"rename_topic_{filter_topic}",
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Save name", key=f"save_topic_{filter_topic}", use_container_width=True):
+                if new_name.strip():
+                    topics.rename_topic(filter_topic, new_name.strip(), username)
+                    st.rerun()
+        with c2:
+            if st.button("Delete topic", key=f"del_topic_{filter_topic}", use_container_width=True):
+                topics.delete_topic(filter_topic, username)
+                st.session_state.active_topic_id = None
+                st.rerun()
 
 
 def _render_thread_list(username: str, filter_topic: Optional[str]) -> list:
@@ -151,6 +159,27 @@ def _disambiguate_topic_labels(tlist: list) -> tuple:
         display.append(label if n == 0 else f"{label} ({vid[:4]})")
         vals.append(vid)
     return display, vals
+
+def _render_bulk_move(username: str, tlist: list, thread_list: list) -> None:
+    if not thread_list:
+        return
+
+    st.caption("Move chats")
+    id_by_label = {f"{th['title']} ({th['id'][:4]})": th["id"] for th in thread_list}
+    selected_labels = st.multiselect(
+        "Select chats",
+        options=list(id_by_label.keys()),
+        key="bulk_move_threads",
+    )
+    display, vals = _disambiguate_topic_labels(tlist)
+    pick = st.selectbox("To topic", display, key="bulk_move_topic")
+    target_id = vals[display.index(pick)]
+
+    if st.button("Move selected", use_container_width=True) and selected_labels:
+        for lab in selected_labels:
+            tid = id_by_label[lab]
+            threads.set_thread_topic(tid, target_id, username)
+        st.rerun()
 
 
 def _render_move_active(username: str, tlist: list, thread_list: list) -> None:
@@ -201,6 +230,7 @@ def _render_topics_and_threads(username: str) -> None:
     st.subheader("💬 Chats")
     thread_list = _render_thread_list(username, filter_topic)
     _render_move_active(username, tlist, thread_list)  # ← add username
+    _render_bulk_move(username, tlist, thread_list)
     _render_rename_active_chat()
   
 def render_sidebar_controls() -> Optional[str]:
