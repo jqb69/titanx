@@ -46,14 +46,15 @@ def list_topics(username: str) -> List[Dict[str, str]]:
     out.sort(key=lambda x: (x.get("title") or "Topic").lower())
     return out
 
-def rename_topic(topic_id: str, title: str, username: str = "") -> None:
+def rename_topic(topic_id: str, title: str, username: str = "") -> bool:
     r = _redis()
     meta = r.hgetall(f"topic:{topic_id}") or {}
-    if username and meta.get("user") != username.lower():
-        return
     if not meta:
-        return
+        return False
+    if username and meta.get("user") != username.lower():
+        return False
     r.hset(f"topic:{topic_id}", "title", (title or "Topic")[:60])
+    return True
 
 
 def delete_topic(topic_id: str, username: str) -> None:
