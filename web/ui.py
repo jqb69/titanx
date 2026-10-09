@@ -12,7 +12,8 @@ import client
 import files            # NEW: file storage backend (new module)
 import file_ui          # NEW: file UI components (new module)
 from typing import Optional
-
+import topics
+import threads
 
 def inject_global_styles() -> None:
     st.markdown(config.CUSTOM_CSS, unsafe_allow_html=True)
@@ -45,10 +46,165 @@ def render_header() -> None:
             st.divider()
             add_logout_button()
 
+# web/ui.py  (topics/threads section only)
 
+def _topic_filter_value(current) -> str:
+    if current is None:
+        return "__all__"
+    if current == "":
+        return "__none__"
+    return current
+
+
+def _apply_topic_filter(chosen_id: str):
+    if chosen_id == "__all__":
+        st.session_state.active_topic_id = None
+        return None
+    if chosen_id == "__none__":
+        st.session_state.active_topic_id = ""
+        return ""
+    st.session_state.active_topic_id = chosen_id
+    return chosen_id
+
+
+def _render_topic_filter(username: str, tlist: list) -> Optional[str]:
+    # (id, display_label) — disambiguate duplicate titles
+    options = [("__all__", "All chats"), ("__none__", "Untagged")]
+    seen = {}
+    for t in tlist:
+        title = t.get("title") or "Topic"
+        n = seen.get(title, 0)
+        seen[title] = n + 1
+        label = title if n == 0 else f"{title} ({t['id'][:4]})"
+        options.append((t["id"], f"📂 {label}"))
+
+    ids = [o[0] for o in options]
+    labels = [o[1] for o in options]
+    id_by_label = dict(zip(labels, ids))
+
+    cur = _topic_filter_value(st.session_state.get("active_topic_id"))
+    idx = ids.index(cur) if cur in ids else 0
+
+    choice = st.selectbox("Filter", labels, index=idx, key="topic_filter_select")
+    return _apply_topic_filter(id_by_label[choice])
+
+def _render_topic_create(username: str) -> None:
+    name = st.text_input("New topic name", key="new_topic_name", placeholder="e.g. TitanX deploy")
+    if st.button("＋ Topic", use_container_width=True) and name.strip():
+        topics.create_topic(username, name.strip())
+        st.rerun()
+
+def _render_topic_manage(username: str, filter_topic: Optional[str]) -> None:
+    if not filter_topic:
+        return
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Rename topic", key="btn_rename_topic"):
+            st.session_state["_rename_topic"] = filter_topic
+    with c2:
+        if st.button("Delete topic", key="btn_del_topic"):
+            topics.delete_topic(filter_topic, username)
+            st.session_state.active_topic_id = None
+            st.rerun()
+
+    if st.session_state.get("_rename_topic") == filter_topic:
+        nt = st.text_input("New topic name", key="rename_topic_input")
+        if st.button("Save topic name") and nt.strip():
+            topics.rename_topic(filter_topic, nt.strip())
+            st.session_state.pop("_rename_topic", None)
+            st.rerun()
+
+
+def _render_thread_list(username: str, filter_topic: Optional[str]) -> list:
+    if st.button("＋ New chat", use_container_width=True, type="primary"):
+        state.new_thread(topic_id=filter_topic or "")
+        st.rerun()
+
+    thread_list = threads.list_threads(username, topic_id=filter_topic)
+    active = state.get_active_thread_id()
+
+    for th in thread_list:
+        label = f"{'▶ ' if th['id'] == active else ''}{th['title']}"
+        c1, c2 = st.columns([0.75, 0.25])
+        with c1:
+            if st.button(label, key=f"th_{th['id']}", use_container_width=True):
+                state.set_active_thread(th["id"])
+                st.rerun()
+        with c2:
+            if st.button("🗑", key=f"del_{th['id']}"):
+                was_active = th["id"] == active
+                threads.delete_thread(th["id"], username)
+                if was_active:
+                    state.new_thread(topic_id=filter_topic or "")
+                st.rerun()
+    return thread_list
+
+
+def _disambiguate_topic_labels(tlist: list) -> tuple:
+    """Returns (display_labels, topic_ids) with id suffix on duplicate titles."""
+    opts = [("— Untagged —", "")] + [(t["title"], t["id"]) for t in tlist]
+    seen = {}
+    display, vals = [], []
+    for label, vid in opts:
+        n = seen.get(label, 0)
+        seen[label] = n + 1
+        display.append(label if n == 0 else f"{label} ({vid[:4]})")
+        vals.append(vid)
+    return display, vals
+
+
+def _render_move_active(username: str, tlist: list, thread_list: list) -> None:
+    active = state.get_active_thread_id()
+    if not active or active not in {th["id"] for th in thread_list}:
+        return
+
+    meta = threads.get_thread(active) or {}
+    current_topic = meta.get("topic_id") or ""
+
+    st.caption("Move this chat")
+    display, vals = _disambiguate_topic_labels(tlist)
+    try:
+        idx = vals.index(current_topic)
+    except ValueError:
+        idx = 0  # Untagged
+
+    pick = st.selectbox("Topic", display, index=idx, key="move_topic_select")
+    if st.button("Move here", use_container_width=True):
+        new_tid = vals[display.index(pick)]
+        if new_tid != current_topic:
+            threads.set_thread_topic(active, new_tid, username)
+            st.rerun()
+
+
+def _render_rename_active_chat() -> None:
+    active = state.get_active_thread_id()
+    if not active:
+        return
+    meta = threads.get_thread(active) or {}
+    rt = st.text_input("Rename chat", value=meta.get("title") or "", key="rename_chat_input")
+    if st.button("Save chat title") and rt.strip():
+        threads.rename_thread(active, rt.strip())
+        try:
+            r = __import__("redis").from_url(config.REDIS_URL, decode_responses=True)
+            r.hset(f"thread:{active}", "title_locked", "1")
+        except Exception:
+            pass
+        st.rerun()
+      
+def _render_topics_and_threads(username: str) -> None:
+    st.subheader("📁 Topics")
+    tlist = topics.list_topics(username)
+    filter_topic = _render_topic_filter(username, tlist)
+    _render_topic_create(username)
+    _render_topic_manage(username, filter_topic)
+
+    st.subheader("💬 Chats")
+    thread_list = _render_thread_list(username, filter_topic)
+    _render_move_active(tlist, thread_list)
+    _render_rename_active_chat()
+  
 def render_sidebar_controls() -> Optional[str]:
     with st.sidebar:
-        # === USER SECTION ===
         username = st.session_state.get("username", "User")
         st.markdown(f"### 👤 {username}")
 
@@ -62,14 +218,14 @@ def render_sidebar_controls() -> Optional[str]:
                 logout()
 
         st.markdown("---")
+        _render_topics_and_threads(username)
+        st.markdown("---")
 
-        # === SYSTEM STATUS ===
         st.header("⚙️ System Status")
         if not client.check_hermes_health():
             st.error("⚠️ Hermes Endpoint: Offline")
         else:
             st.success("🟢 Hermes Endpoint: Online")
-        st.markdown("---") 
         s = client.check_ollama_health()
         if s["ok"] and s["has_model"]:
             st.success(client.ollama_status_line())
@@ -77,23 +233,34 @@ def render_sidebar_controls() -> Optional[str]:
             st.warning(client.ollama_status_line())
         else:
             st.error(client.ollama_status_line())
-        st.markdown("---")
 
-        # File Vault
+        st.markdown("---")
         file_ui.render_file_manager()
 
     return file_ui.get_attached_for_message()
 
 
+def _display_content(content: str) -> str:
+    if not content:
+        return ""
+    if "--- LOCAL WORKSPACE FILE ATTACHED ---" not in content:
+        return content
+    if "User Message:" in content:
+        return content.split("User Message:")[-1].strip()
+    # strip marker block; show whatever is left
+    before, _, after = content.partition("--- LOCAL WORKSPACE FILE ATTACHED ---")
+    text = (before or after or "").strip()
+    return text or "_(message with attachment)_"
+
+
 def render_chat_history() -> None:
     for msg in state.get_messages():
-        if msg["role"] == "system" or "--- LOCAL WORKSPACE FILE ATTACHED" in msg["content"]:
+        if msg.get("role") == "system":
             continue
+        content = msg.get("content") or ""
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            # NEW: show file chips if this message had attachments
-            file_ui.render_message_file_chips(msg["content"])
-
+            st.markdown(_display_content(content))
+            file_ui.render_message_file_chips(content)
 
 def render_generation_sequence(prompt: str, file_context: Optional[str]) -> None:
     # file_context now comes from file_ui.get_attached_for_message() and may
