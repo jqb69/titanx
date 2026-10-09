@@ -67,17 +67,21 @@ def new_thread(topic_id: str = "", title: str = "New chat") -> str:
 
 
 def get_messages() -> List[Dict[str, str]]:
-    if "messages" not in st.session_state:
+    tid = get_active_thread_id()
+    if not tid:
         st.session_state.messages = []
-    return st.session_state.messages
+        return []
+    msgs = threads.load_messages(tid)
+    st.session_state.messages = msgs
+    return msgs
 
 
 def append_message(role: str, content: str) -> None:
     tid = get_active_thread_id()
-    if not tid:
+    if not tid or not threads.get_thread(tid):
         tid = new_thread()
     msgs = threads.append_message(tid, role, content)
-    st.session_state.messages = msgs
+    st.session_state.messages = msgs if msgs is not None else threads.load_messages(tid)
 
 
 def set_stop_flag(value: bool) -> None:
