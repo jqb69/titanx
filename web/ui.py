@@ -200,7 +200,7 @@ def _render_topics_and_threads(username: str) -> None:
 
     st.subheader("💬 Chats")
     thread_list = _render_thread_list(username, filter_topic)
-    _render_move_active(tlist, thread_list)
+    _render_move_active(username, tlist, thread_list)  # ← add username
     _render_rename_active_chat()
   
 def render_sidebar_controls() -> Optional[str]:
