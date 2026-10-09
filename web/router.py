@@ -78,7 +78,7 @@ def last_user_text(messages: list) -> str:
 
 def compress_for_agent(text: str, max_chars: int = None) -> str:
     text = (text or "").strip()
-    max_chars = max_chars or int(getattr(config, "AGENTIC_BRIEF_CHARS", 1200))
+    max_chars = max_chars or int(getattr(config, "AGENTIC_BRIEF_CHARS", 1700))
     if not text:
         return text
     if len(text) <= max_chars and not getattr(config, "AGENTIC_ALWAYS_COMPRESS", False):
@@ -93,7 +93,7 @@ def compress_for_agent(text: str, max_chars: int = None) -> str:
     read_t = float(getattr(config, "OLLAMA_COMPRESS_READ", 8))
     system = (
         "Rewrite as a concise agent brief. Keep goal, constraints, URLs/paths. "
-        "Max 15 lines. No preamble."
+        "Max 25 lines if NOT a code. No preamble."
     )
     try:
         r = _SESSION.post(  # module session — do NOT new Session() per call
