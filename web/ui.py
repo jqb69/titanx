@@ -54,17 +54,31 @@ def _topic_filter_value(current) -> str:
     if current == "":
         return "__none__"
     return current
+  
+def clear_view_keep_thread() -> None:
+    st.session_state.messages = []
 
 
 def _apply_topic_filter(chosen_id: str):
+    prev = st.session_state.get("active_topic_id", "__unset__")
+
     if chosen_id == "__all__":
-        st.session_state.active_topic_id = None
-        return None
-    if chosen_id == "__none__":
-        st.session_state.active_topic_id = ""
-        return ""
-    st.session_state.active_topic_id = chosen_id
-    return chosen_id
+        new_filter = None
+    elif chosen_id == "__none__":
+        new_filter = ""
+    else:
+        new_filter = chosen_id
+
+    st.session_state.active_topic_id = new_filter
+
+    # Topic (or All/Untagged) changed → clear visible messages
+    if prev != "__unset__" and prev != new_filter:
+        clear_view_keep_thread()
+        # Start a fresh chat in this filter so user isn't on a hidden thread
+        state.new_thread(topic_id=new_filter or "", title="New chat")
+        # new_thread already sets active + empty messages
+
+    return new_filter
 
 
 def _render_topic_filter(username: str, tlist: list) -> Optional[str]:
