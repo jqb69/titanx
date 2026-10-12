@@ -115,7 +115,7 @@ def _render_topic_filter(username: str, tlist: list) -> Optional[str]:
     idx = ids.index(cur) if cur in ids else 0
 
     choice = st.selectbox("Filter", labels, index=idx, key="topic_filter_select")
-    return _apply_topic_filter(id_by_label[choice])
+    return _apply_topic_filter(id_by_label[choice],username)
 
 def _render_topic_create(username: str) -> None:
     name = st.text_input("New topic name", key="new_topic_name", placeholder="e.g. TitanX deploy")
