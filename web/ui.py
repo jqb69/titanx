@@ -81,17 +81,14 @@ def _apply_topic_filter(chosen_id: str, username: str):
     if not thread_list:
         # Empty topic: clear board only
         clear_view_keep_thread()
-        st.session_state.active_thread_id = None
+        state.new_thread(topic_id=new_filter or "", title="New chat")
     else:
         active = state.get_active_thread_id()
         ids = {th["id"] for th in thread_list}
         if active in ids:
-            # Still in this topic — reload that chat
             state.set_active_thread(active)
         else:
-            # Active chat not in this topic — clear board; user clicks a chat
-            clear_view_keep_thread()
-            st.session_state.active_thread_id = None
+            state.set_active_thread(thread_list[0]["id"])  # latest in top
 
     return new_filter
 
